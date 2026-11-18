@@ -1,4 +1,4 @@
-# Amazon review scraper (Seller Central to Google Sheets)
+# Seller Central scraper: Amazon reviews to Google Sheets
 
 Every Monday at 6:00am this Mac wakes up, opens Chrome, goes to the
 Seller Central **Customer Reviews** page, clicks through every page, and
@@ -36,7 +36,7 @@ git clone <this repo's URL>
 ```
 
 ```bash
-cd amazon-review-scraper
+cd sellercentral-scraper
 ```
 
 ### Step 1: Install

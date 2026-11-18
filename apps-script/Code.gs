@@ -1,7 +1,7 @@
 /**
  * Amazon reviews -> this Google Sheet.
  *
- * The Mac script (amazon-review-scraper) sends reviews here after each pull.
+ * The Mac script (sellercentral-scraper) sends reviews here after each pull.
  * This adds new reviews and updates changed ones (by Review ID), and keeps
  * the "Monthly" and "By product" tabs up to date with formulas.
  *
@@ -132,7 +132,7 @@ function checkMissedRun() {
       (last ? ' (last report: ' + last.slice(0, 16).replace('T', ' ') + ' UTC).' : '.') + '\n\n' +
       'Usually: the Mac was off, asleep without power, or the lid was closed.\n\n' +
       'Fix: open the Mac, plug it in, then in Terminal:\n' +
-      '  cd amazon-review-scraper\n  npm run pull');
+      '  cd sellercentral-scraper\n  npm run pull');
   }
 }
 
