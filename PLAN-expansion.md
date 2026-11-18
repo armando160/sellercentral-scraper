@@ -1,10 +1,37 @@
 # Plan: more brands and marketplaces
 
-Status: **plan only, nothing built yet** (written 18 Nov 2026).
+Status: **plan only, nothing built yet** (written 18 Nov 2026, answers added same day).
 Today the scraper pulls one view: store **LIFEPRO OUTLET**, marketplace
 **United States**, every Monday.
 
-## Goal
+## Answers (18 Nov 2026)
+
+1. The Brand filter's 3 brands on the LIFEPRO OUTLET store: **LifePro, Waver, RumbleX**.
+   They're already in today's pull (all 3 are in the same view). Note: the first
+   998 reviews all said brand "LifePro", so check that Waver / RumbleX reviews show up.
+2. **Other brands are other stores**, picked from the top-bar store selector.
+   All are reachable with the same login (Armando believes).
+3. Marketplaces: **North America ("NA") only for now.** Armando is checking access to others.
+4. Other brands: **weekly, on Tuesdays.** Lifepro stays on Mondays.
+5. Sheets: **one shared sheet with everything AND one sheet per brand.**
+6. Email: **one email every time it runs** (one Monday email, one Tuesday email).
+
+### What changes in the plan because of these answers
+
+- **Two run days**: Monday 6:00am = LIFEPRO OUTLET store; Tuesday 6:00am = every
+  other store, one after another. No "every 2/4 weeks" logic needed.
+- **Mac wake** becomes Monday + Tuesday: `sudo pmset repeat wakeorpoweron MT 05:55:00`.
+- **Checks before each run**: Sunday 6pm (for Monday) and Monday 6pm (for Tuesday).
+- **Missed-run email** from Google on Monday and Tuesday ~9am.
+- **Per-brand sheets**: recommended way, no extra code: each brand gets its own
+  Google Sheet that pulls its rows from the shared sheet with
+  `=QUERY(IMPORTRANGE("<shared sheet>", "Reviews!A:T"), "where Col<brand> = 'Waver'")`
+  plus its own Monthly tab. Share each with that brand's team.
+  (Open question: separate files, or just one tab per brand inside the shared sheet?)
+- **Still to confirm**: the list of stores in the selector (names), and which
+  NA marketplaces each store sells in (US only, or also Canada / Mexico).
+
+## Goal (original)
 
 | What | How often |
 |---|---|
