@@ -28,8 +28,9 @@ Not included: High Cloud Sales, Kitchenova Global, Loft and Ivy, Oaktiv.
 them, that view is skipped automatically (the run notes "no reviews / not
 available" in the email).
 
-LIFEPRO OUTLET has 3 brands inside it (LifePro, Waver, RumbleX). They stay
-in one view. The sheet keeps Amazon's brand in a **Sub-brand** column.
+LIFEPRO OUTLET's Brand filter also lists Waver and RumbleX. That's a listing
+setup mistake, not real brands: everything in the store counts as **Lifepro**.
+Amazon's brand field is not shown in the sheet.
 
 ## Sheet design (one shared sheet)
 
@@ -37,9 +38,8 @@ No separate sheet per brand. One sheet, three tabs:
 
 ### Tab 1: Reviews (all data)
 
-Same as today plus 3 columns near the front: **Brand** (Lifepro / Joyberri /
-Sunello), **Marketplace** (US, CA, MX, UK, DE...), **Sub-brand** (Amazon's
-brand name, e.g. Waver). Filters on, header frozen, banded rows, stars
+Same as today plus 2 columns near the front: **Brand** (Lifepro / Joyberri /
+Sunello, set from the store) and **Marketplace** (US, CA, MX, UK, DE...). Filters on, header frozen, banded rows, stars
 colored (1-2 red, 3 yellow, 4-5 green), review text wrapped. Review link
 points to the right Amazon site (amazon.co.uk, amazon.de, ...).
 
