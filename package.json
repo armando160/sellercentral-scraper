@@ -1,0 +1,23 @@
+{
+  "name": "amazon-review-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pulls our own Amazon reviews from Seller Central (Brands > Customer Reviews) into a local SQLite database.",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "login": "node login.js",
+    "pull": "node scrape.js",
+    "remind": "node remind.js",
+    "reparse": "node reparse.js",
+    "export": "node export.js",
+    "monthly": "node export.js --monthly",
+    "stats": "node stats.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "playwright": "1.49.1"
+  }
+}

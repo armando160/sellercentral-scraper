@@ -1,0 +1,10 @@
+node_modules/
+.browser-profile/
+data/
+discovery/
+exports/
+logs/
+.DS_Store
+*.db
+*.db-wal
+*.db-shm
