@@ -1,150 +1,131 @@
-# Plan: more brands and marketplaces
+# Plan: more stores, marketplaces and a better sheet
 
-Status: **plan only, nothing built yet** (written 18 Nov 2026, answers added same day).
-Today the scraper pulls one view: store **LIFEPRO OUTLET**, marketplace
-**United States**, every Monday.
+Status: **plan only, nothing built yet.** Last updated 18 Nov 2026 with
+Armando's answers. Today the scraper pulls one view (LIFEPRO OUTLET, United
+States) every Monday.
 
-## Answers (18 Nov 2026)
+## What we're pulling
 
-1. The Brand filter's 3 brands on the LIFEPRO OUTLET store: **LifePro, Waver, RumbleX**.
-   They're already in today's pull (all 3 are in the same view). Note: the first
-   998 reviews all said brand "LifePro", so check that Waver / RumbleX reviews show up.
-2. **Other brands are other stores**, picked from the top-bar store selector.
-   All are reachable with the same login (Armando believes).
-3. Marketplaces: **North America ("NA") only for now.** Armando is checking access to others.
-4. Other brands: **weekly, on Tuesdays.** Lifepro stays on Mondays.
-5. Sheets: **one shared sheet with everything AND one sheet per brand.**
-6. Email: **one email every time it runs** (one Monday email, one Tuesday email).
+A **view** = one store + one marketplace on the Customer Reviews page.
 
-### What changes in the plan because of these answers
-
-- **Two run days**: Monday 6:00am = LIFEPRO OUTLET store; Tuesday 6:00am = every
-  other store, one after another. No "every 2/4 weeks" logic needed.
-- **Mac wake** becomes Monday + Tuesday: `sudo pmset repeat wakeorpoweron MT 05:55:00`.
-- **Checks before each run**: Sunday 6pm (for Monday) and Monday 6pm (for Tuesday).
-- **Missed-run email** from Google on Monday and Tuesday ~9am.
-- **Per-brand sheets**: recommended way, no extra code: each brand gets its own
-  Google Sheet that pulls its rows from the shared sheet with
-  `=QUERY(IMPORTRANGE("<shared sheet>", "Reviews!A:T"), "where Col<brand> = 'Waver'")`
-  plus its own Monthly tab. Share each with that brand's team.
-  (Open question: separate files, or just one tab per brand inside the shared sheet?)
-- **Still to confirm**: the list of stores in the selector (names), and which
-  NA marketplaces each store sells in (US only, or also Canada / Mexico).
-
-## Goal (original)
-
-| What | How often |
-|---|---|
-| Lifepro, United States | Every Monday (as today) |
-| Every other brand and marketplace | Less often (every 2 or 4 weeks) |
-
-One sheet, one email per run, same Mac, same sign-in process.
-
-## What we know
-
-1. The reviews page shows one **store + marketplace** at a time. The store and
-   marketplace are picked in the top bar ("LIFEPRO OUTLET | United States").
-   Changing it changes it for every open Seller Central tab.
-2. The page has a **Brand filter showing "(3)"**: 3 brands in this store.
-   But the first pull (998 reviews) was **100% LifePro**. So either the other
-   2 brands have almost no reviews in the last 90 days, or the filter was
-   limited to LifePro. **Must check** (question 1).
-3. Each view only shows the **last 90 days**, max **1,000 reviews**.
-   So each view must be pulled before 1,000 new reviews pile up.
-   Lifepro US gets ~350/month, so weekly is very safe. A view with fewer than
-   ~300 reviews a month is safe at every 4 weeks.
-4. Every review already saves its `brand`. Marketplace and store are not saved
-   yet (today they're always LIFEPRO OUTLET / US).
-
-## Questions for Armando (answer before building)
-
-1. **Brands:** which brands, and are they all in the LIFEPRO OUTLET store?
-   (Chai Vision brands seen elsewhere: Lifepro, JoyBerri, PetCove, LOFT, PurrTek.)
-   Open the reviews page > Brand filter: which 3 names are listed?
-2. **Other stores:** are some brands in a **different Seller Central account**?
-   Does your login reach them with the account switcher (top bar), or is it a
-   different login?
-3. **Marketplaces:** which ones? US, Canada, Mexico are in the same North
-   America login. UK / Europe use a different site (sellercentral-europe) and
-   probably a separate sign-in.
-4. **How often** for the others: every 2 weeks or every 4 weeks?
-5. **Sheet:** one sheet with Brand and Marketplace columns (recommended), or
-   one sheet per brand?
-6. **Email:** one combined Monday email (recommended), or one per brand?
-
-## Build plan (after the answers)
-
-### Step 1: A list of "views" to pull
-
-A new file `views.json`, one line per store + marketplace:
-
-| name | store | marketplace | every |
+| Store (top-bar selector) | Brand in sheet | Marketplaces | Day |
 |---|---|---|---|
-| lifepro-us | LIFEPRO OUTLET | United States | 1 week |
-| lifepro-ca | LIFEPRO OUTLET | Canada | 4 weeks |
-| other-store-us | (store name) | United States | 2 weeks |
+| LIFEPRO OUTLET | Lifepro | North America + Europe + Middle East (below) | Monday |
+| Joyberri LLC | Joyberri | North America | Tuesday |
+| Sunello | Sunello | North America | Tuesday |
 
-Brand isn't needed here: each review already says its brand.
+Not included: High Cloud Sales, Kitchenova Global, Loft and Ivy, Oaktiv.
 
-### Step 2: Switch store / marketplace like a person
+**Lifepro marketplaces**, in order of priority:
 
-Before reading a view, the script clicks the top-bar switcher and picks the
-store and marketplace, then checks the top bar shows them before reading.
-If it can't find the option, it skips that view and says so in the email.
-First, watch how the switcher works in the browser (same as we did for the
-reviews page): its menu, any "Select account" page, and what the address does.
+| Phase | Marketplaces | Access |
+|---|---|---|
+| 1 | US, Canada, Mexico | Has access |
+| 2 | UK, Germany, France, Italy, Spain | Requested |
+| 3 | Netherlands, Belgium, Sweden, Poland, UAE, Saudi Arabia | Requested |
 
-### Step 3: One Monday job decides what's due
+"North America" = US, Canada, Mexico. If a store doesn't sell in one of
+them, that view is skipped automatically (the run notes "no reviews / not
+available" in the email).
 
-Keep the single Monday 6:00am schedule. Each Monday the script:
-1. Always pulls **lifepro-us**.
-2. Pulls any other view whose last good pull was **at least its "every" ago**.
-3. Switches back to LIFEPRO OUTLET / United States at the end (so the
-   Seller Central tabs you open later aren't left on another market).
+LIFEPRO OUTLET has 3 brands inside it (LifePro, Waver, RumbleX). They stay
+in one view. The sheet keeps Amazon's brand in a **Sub-brand** column.
 
-This keeps one wake-up, one sign-in check and one email. A pause of a few
-minutes between views keeps it looking human. Rough time: ~3 min per view.
+## Sheet design (one shared sheet)
 
-### Step 4: Save store and marketplace
+No separate sheet per brand. One sheet, three tabs:
 
-- Database: add `store` and `marketplace` columns. Existing rows = LIFEPRO OUTLET / United States.
-- Runs table: one row per view per run, so "last good pull" is per view.
-- Review links use the right Amazon site (amazon.ca, amazon.com.mx, ...).
+### Tab 1: Reviews (all data)
 
-### Step 5: Sheet
+Same as today plus 3 columns near the front: **Brand** (Lifepro / Joyberri /
+Sunello), **Marketplace** (US, CA, MX, UK, DE...), **Sub-brand** (Amazon's
+brand name, e.g. Waver). Filters on, header frozen, banded rows, stars
+colored (1-2 red, 3 yellow, 4-5 green), review text wrapped. Review link
+points to the right Amazon site (amazon.co.uk, amazon.de, ...).
 
-- Reviews tab: add **Brand**, **Store**, **Marketplace** columns.
-- Monthly tab: month x brand x marketplace counts.
-- By product: unchanged, plus a brand column.
-- Apps Script gets updated (paste + New version, as before).
+### Tab 2: Monthly (the summary people read)
 
-### Step 6: Email
+Top to bottom:
 
-One email after the Monday run:
-- per view: pulled or skipped (not due), new reviews, new 1-2 star
-- new 1-2 star reviews grouped by brand
-- any view that failed and why
+1. **Global summary**: one row per month, all brands and markets. Reviews,
+   1-2 star count, % 1-2 star, average stars. Small trend chart next to it.
+2. **Lifepro summary**: same table, Lifepro only, plus one column per
+   marketplace (US, CA, MX, UK, DE...) with that month's review count.
+3. **Explore table**: two dropdowns at the top (**Brand**, **Marketplace**,
+   each with "All"). The table below updates: month, reviews, 1 to 5 star
+   counts, % 1-2 star, average. Made with formulas, no code.
 
-Sunday check stays the same. Missed-run check stays the same.
+Styling: brand colors for headers, big readable numbers, months newest first,
+% and averages formatted, conditional colors on average stars and % low-star.
 
-### Step 7: Test, then roll out
+### Tab 3: By product
 
-1. Fake site: add a store/marketplace switcher to `test/mock-site.js`, test
-   switching, skipping, "due" logic, and switching back.
-2. Real: run each new view **once by hand** while watching, check the sheet.
-3. Then turn it on in the Monday job.
+Parent ASIN, product name, brand, marketplace, reviews, average stars,
+1-2 star count. Sorted by reviews. Filters on.
 
-### Europe / UK (if needed)
+### Migration
 
-Separate site and sign-in. Would need its own saved Chrome profile
-(`npm run login -- --region=eu`) and its own Sunday sign-in check. Build only
-if question 3 says yes. Same 90-day / 1,000 limits apply.
+Existing 998 rows get Brand = Lifepro, Marketplace = US. The Apps Script
+rebuilds Monthly and By product with the new layout (paste + New version,
+like before).
+
+## How a run works
+
+- **Monday 6:00am**: all Lifepro views, one after another.
+- **Tuesday 6:00am**: Joyberri and Sunello North America views.
+- For each view: pick the store and marketplace in the top-bar selector (by
+  clicking, like a person), check the top bar shows them, then click through
+  the review pages as today. A short pause between views.
+- At the end: switch back to LIFEPRO OUTLET / United States.
+- Time: about 3 min for a busy view (US), under a minute for small ones.
+  Monday with all Lifepro markets: ~20 to 30 min.
+- **One email per run** (one Monday, one Tuesday): per view, how many new
+  reviews and new 1-2 star reviews, which views were skipped or failed, then
+  the new 1-2 star reviews grouped by brand and marketplace.
+
+Schedule changes:
+- Mac wakes Monday **and** Tuesday: `sudo pmset repeat wakeorpoweron MT 05:55:00`.
+- Night-before check (power + signed in): Sunday 6pm and Monday 6pm.
+- Google's "did not run" email: Monday and Tuesday ~9am.
+
+## Europe and Middle East (phase 2 and 3)
+
+Europe (UK, DE, FR, IT, ES, NL, BE, SE, PL) uses a different Seller Central
+site (sellercentral-europe.amazon.com). UAE and Saudi Arabia may be separate
+again. Before building:
+- Check if the reviews page link works there and looks the same.
+- Check if it needs a separate sign-in. If yes: a second saved Chrome profile
+  and `npm run login -- --region=eu`, checked by the night-before check too.
+- Same limits: last 90 days, max 1,000 reviews per view.
+
+## Build order
+
+1. **Watch the selector** in the browser: how the store / marketplace picker
+   works, what the page and address do after switching. Nothing gets built
+   before this.
+2. **Views list** (`views.json`): store, marketplace, brand label, day.
+3. **Switching + per-view runs** in the scraper, tested on the fake site
+   (add a fake selector to `test/mock-site.js`).
+4. **Database**: add brand, store, marketplace; existing rows = Lifepro / US.
+5. **Sheet redesign** (Apps Script): new columns, Monthly tab with the 3
+   tables and dropdowns, styling, By product.
+6. **Email per run** with per-view lines.
+7. **Schedule**: Tuesday run, Monday 6pm check, Mac wake on Tuesday.
+8. **First real runs by hand**, watching: Lifepro CA and MX, Joyberri US,
+   Sunello US. Check the sheet. Then turn on the schedule.
+9. **Europe** once access is granted: phase 2 markets first.
+
+## Still open
+
+- Exact marketplaces per store in North America (does Joyberri / Sunello sell
+  in Canada and Mexico?). The selector will show this in step 1.
+- Europe / Middle East access (requested).
 
 ## Risks
 
 | Risk | What we do |
 |---|---|
-| More page loads on Mondays looks less human | Pauses between views; only pull views that are due |
-| Switching marketplace changes it for your open tabs | Runs at 6am; switch back to Lifepro US at the end |
-| A busy view passes 1,000 reviews between pulls | Email warns when a view's 90-day total is near 1,000; then pull it more often |
-| Different login for another store or Europe | Separate saved profile per login; Sunday check covers each |
+| More page loads look less human | Pauses between views; 2 days instead of 1 |
+| Switching marketplace changes it for your open tabs | Runs at 6am; switches back to Lifepro US at the end |
+| A busy view passes 1,000 reviews in 90 days | Email warns when a view is near 1,000; weekly is fine for all today |
+| Europe needs another sign-in | Second saved profile; night-before check covers both |
