@@ -25,7 +25,17 @@ try {
 if (signedIn === false) problems.push('Seller Central signed out: run "npm run login"');
 if (signedIn === null) problems.push("couldn't check Seller Central");
 
-await notify(
-  problems.length ? 'Reviews pull tomorrow: fix tonight' : 'Reviews pull tomorrow 6:00am',
-  problems.length ? problems.join('. ') + '.' : 'All good: plugged in, signed in. Leave the lid open.');
+const text = problems.length
+  ? ['Tomorrow (Monday) 6:00am the Mac pulls the Amazon reviews. Fix these tonight:', '',
+      ...problems.map((p) => `  - ${p}`),
+      ...(signedIn === false ? ['', 'To sign in again (on the Mac, in Terminal):', `  cd "${config.root}"`, '  npm run login'] : [])]
+  : ['Tomorrow (Monday) 6:00am the Mac pulls the Amazon reviews.', '',
+      '  - Plugged in: yes', '  - Seller Central signed in: yes', '',
+      'Leave the Mac plugged in with the lid open tonight.'];
+await notify({
+  title: problems.length ? 'FIX TONIGHT before tomorrow\'s pull' : 'pull tomorrow 6:00am, all good',
+  short: problems.length ? problems.join('. ') + '.' : 'Plugged in, signed in. Leave the lid open.',
+  emailText: text.join('\n'),
+  kind: 'remind',
+});
 console.log(problems.length ? problems.join('\n') : 'All good.');

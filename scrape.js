@@ -20,6 +20,7 @@ const db = openDb();
 const runId = startRun(db);
 const totals = { pages: 0, seen: 0, new_reviews: 0, low_star_new: 0, amazon_total: null, uploaded: 0 };
 let loaded = 0; // pages of data received so far
+const newLowStar = []; // new 1 and 2 star reviews, for the email
 
 const log = (msg) => console.log(`${new Date().toISOString().slice(11, 19)} ${msg}`);
 const { context, page } = await openBrowser();
@@ -35,7 +36,7 @@ onReviewsData(page, async (url, text) => {
     if (upsertReview(db, r) === 'new') {
       fresh += 1;
       totals.new_reviews += 1;
-      if (r.rating && r.rating <= 2) totals.low_star_new += 1;
+      if (r.rating && r.rating <= 2) { totals.low_star_new += 1; newLowStar.push(r); }
     }
   }
   loaded += 1;
@@ -103,14 +104,49 @@ try {
 finishRun(db, runId, { status, note, ...totals });
 const month = new Date().toISOString().slice(0, 7);
 const mtd = db.prepare('SELECT COUNT(*) n FROM reviews WHERE substr(review_date, 1, 7) = ?').get(month).n;
+const months = db.prepare(`SELECT substr(review_date, 1, 7) m, COUNT(*) n, SUM(rating <= 2) low, ROUND(AVG(rating), 2) avg
+  FROM reviews GROUP BY m ORDER BY m DESC LIMIT 4`).all();
 db.close();
 
-const summary = status === 'ok'
-  ? `${totals.new_reviews} new reviews (${totals.low_star_new} are 1-2 star). ${mtd} so far this month. ${totals.pages} pages read.`
+const short = status === 'ok'
+  ? `${totals.new_reviews} new reviews (${totals.low_star_new} are 1-2 star). ${mtd} so far this month.`
   : status === 'login_needed'
     ? 'Seller Central signed out. Run "npm run login" on the Mac, then "npm run pull".'
     : `FAILED: ${note}`;
-log(`Run ${runId}: ${summary}`);
-await notify(status === 'ok' ? 'Amazon reviews pulled' : 'Amazon reviews: action needed', summary);
+
+const lines = [];
+if (status === 'ok') {
+  lines.push(`The weekly pull finished.`, '',
+    `New reviews: ${totals.new_reviews}`,
+    `New 1-2 star reviews: ${totals.low_star_new}`,
+    `Pages read: ${totals.pages}`,
+    `Amazon shows ${totals.amazon_total ?? '?'} reviews in the last 90 days.`,
+    `Sent to Google Sheet: ${totals.uploaded}`);
+} else if (status === 'login_needed') {
+  lines.push('The pull could not run: Seller Central signed out.', '',
+    'Fix (on the Mac, in Terminal):',
+    '  cd "' + config.root + '"', '  npm run login     (sign in, press Enter)', '  npm run pull');
+} else {
+  lines.push('The pull FAILED.', '', `Error: ${note}`, '',
+    `Pages read before it stopped: ${totals.pages}. New reviews saved: ${totals.new_reviews}.`,
+    'A screenshot is in the logs/ folder. Try again with: npm run pull');
+}
+lines.push('', 'Reviews per month (newest first):');
+for (const m of months) lines.push(`  ${m.m}: ${m.n} reviews, ${m.low} are 1-2 star, avg ${m.avg} stars`);
+if (newLowStar.length) {
+  lines.push('', 'New 1-2 star reviews:');
+  for (const r of newLowStar.slice(0, 25)) {
+    lines.push('', `${r.rating} star, ${r.review_date}, ${r.parent_asin}${r.child_asin ? ` / ${r.child_asin}` : ''}`,
+      `  ${r.product_title ? r.product_title.slice(0, 90) : ''}`,
+      `  "${r.title ?? ''}": ${(r.body ?? '').slice(0, 300)}`,
+      `  https://www.amazon.com/gp/customer-reviews/${r.review_id}`);
+  }
+  if (newLowStar.length > 25) lines.push('', `...and ${newLowStar.length - 25} more in the sheet.`);
+}
+
+const title = status === 'ok' ? `${totals.new_reviews} new (${totals.low_star_new} low-star)`
+  : status === 'login_needed' ? 'ACTION NEEDED: sign in' : 'PULL FAILED';
+log(`Run ${runId}: ${short}`);
+await notify({ title, short, emailText: lines.join('\n'), kind: 'pull' });
 await healthcheck(status === 'ok');
 process.exitCode = { ok: 0, login_needed: 2 }[status] ?? 1;

@@ -62,8 +62,12 @@ http.createServer((req, res) => {
   if (url.pathname === '/sheets' && req.method === 'POST') {
     let b = ''; req.on('data', (c) => (b += c));
     req.on('end', () => {
-      const { token, rows } = JSON.parse(b);
+      const { token, rows, email } = JSON.parse(b);
       if (token !== 'tok-test') return send(200, 'application/json', JSON.stringify({ ok: false, error: 'bad token' }));
+      if (email) {
+        console.log(`\n=== EMAIL (${email.kind}) ===\nSubject: ${email.subject}\n${email.text}\n=== END ===`);
+        return send(200, 'application/json', JSON.stringify({ ok: true, emailed: true }));
+      }
       let inserted = 0, updated = 0;
       for (const r of rows) { sheet.has(r['Review ID']) ? updated++ : inserted++; sheet.set(r['Review ID'], r); }
       send(200, 'application/json', JSON.stringify({ ok: true, inserted, updated }));

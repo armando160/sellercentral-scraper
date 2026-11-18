@@ -5,11 +5,17 @@
  * This adds new reviews and updates changed ones (by Review ID), and keeps
  * the "Monthly" and "By product" tabs up to date with formulas.
  *
- * Setup: see README.md, section "Google Sheets".
+ * It also sends the status emails (Sunday check, Monday result, errors) and
+ * emails you on Monday morning if the Mac never reported in.
+ *
+ * Setup: see README.md, section "Google Sheets" and "Email alerts".
  * Paste the token from the Mac into TOKEN below, then Deploy > New deployment
  * > Web app > Execute as: Me > Who has access: Anyone.
  */
 const TOKEN = 'PASTE-TOKEN-HERE';
+
+// Who gets the status emails. Separate several with commas.
+const EMAIL_TO = 'armando@chaivision.com';
 
 const SHEET = 'Reviews';
 const HEADERS = ['Review ID', 'Review date', 'Month', 'Stars', 'Title', 'Review text', 'Parent ASIN',
@@ -18,6 +24,15 @@ const HEADERS = ['Review ID', 'Review date', 'Month', 'Stars', 'Title', 'Review 
 function doPost(e) {
   const body = JSON.parse(e.postData.contents);
   if (body.token !== TOKEN) return json_({ ok: false, error: 'bad token' });
+
+  // Status email from the Mac: { email: { subject, text, kind } }
+  if (body.email) {
+    MailApp.sendEmail({ to: EMAIL_TO, subject: body.email.subject, body: body.email.text, name: 'Amazon reviews scraper' });
+    if (body.email.kind === 'pull') {
+      PropertiesService.getScriptProperties().setProperty('lastPullAt', new Date().toISOString());
+    }
+    return json_({ ok: true, emailed: true });
+  }
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -90,6 +105,34 @@ function summaryTabs_(ss) {
     p.getRange('E1').setFormula(
       "=QUERY(Reviews!A:Q, \"select G, count(A) where A is not null group by G pivot C " +
       "label G 'Parent ASIN (count by month)'\", 1)");
+  }
+}
+
+// ---- Missed-run check (runs on Google's side, so it works even if the Mac is dead) ----
+
+// Run this ONCE from the editor (select it, click Run). It schedules
+// checkMissedRun for every Monday around 9am.
+function setupMissedRunCheck() {
+  ScriptApp.getProjectTriggers()
+    .filter((t) => t.getHandlerFunction() === 'checkMissedRun')
+    .forEach((t) => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('checkMissedRun').timeBased()
+    .onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(9).everyWeeks(1).create();
+  MailApp.sendEmail(EMAIL_TO, 'Amazon reviews: missed-run check is on',
+    'Every Monday around 9am Google will check that the Mac sent its 6am pull result. ' +
+    'If it did not, you will get an email.');
+}
+
+function checkMissedRun() {
+  const last = PropertiesService.getScriptProperties().getProperty('lastPullAt');
+  const hours = last ? (Date.now() - new Date(last).getTime()) / 36e5 : Infinity;
+  if (hours > 12) {
+    MailApp.sendEmail(EMAIL_TO, 'Amazon reviews: Monday pull DID NOT RUN',
+      'The Mac did not report a pull this morning' +
+      (last ? ' (last report: ' + last.slice(0, 16).replace('T', ' ') + ' UTC).' : '.') + '\n\n' +
+      'Usually: the Mac was off, asleep without power, or the lid was closed.\n\n' +
+      'Fix: open the Mac, plug it in, then in Terminal:\n' +
+      '  cd amazon-review-scraper\n  npm run pull');
   }
 }
 

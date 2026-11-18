@@ -108,7 +108,25 @@ sudo pmset repeat wakeorpoweron M 05:55:00
 
 Leave the Mac **plugged in with the lid open**. It can sleep; it will wake.
 
-### Step 6 (optional): Alerts on your phone
+### Step 6: Email alerts
+
+The Apps Script sends the status emails to `EMAIL_TO` (top of `Code.gs`).
+After pasting or updating `Code.gs`:
+
+1. In the Apps Script editor, pick **setupMissedRunCheck** in the function
+   menu (top bar) and click **Run**. Allow the Gmail permission. You get a
+   "missed-run check is on" email.
+2. **Deploy > Manage deployments > pencil > Version: New version > Deploy.**
+   The URL stays the same.
+
+| Email | When |
+|---|---|
+| "pull tomorrow 6:00am, all good" or "FIX TONIGHT" | Sunday 6pm, from the Mac |
+| "97 new (6 low-star)" with the new 1-2 star reviews listed | Monday ~6:05am, from the Mac |
+| "ACTION NEEDED: sign in" or "PULL FAILED" | Monday, from the Mac, instead of the above |
+| "Monday pull DID NOT RUN" | Monday ~9am, from Google, only if the Mac never reported |
+
+### Step 7 (optional): Phone alerts
 
 Mac notifications only help if you're at the Mac.
 
