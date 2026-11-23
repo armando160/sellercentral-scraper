@@ -1,0 +1,35 @@
+{
+  "_help": [
+    "One line per view (store + marketplace) to pull.",
+    "store and marketplace must match the Seller Central top-bar selector exactly.",
+    "brand is what the Google Sheet shows. code is the short marketplace name in the sheet.",
+    "day: which day's run pulls it (monday or tuesday). enabled: false = skipped for now.",
+    "home is where the browser is left at the end of every run."
+  ],
+  "home": { "store": "LIFEPRO OUTLET", "marketplace": "United States" },
+  "views": [
+    { "store": "LIFEPRO OUTLET", "marketplace": "United States", "code": "US", "brand": "Lifepro", "day": "monday" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "Canada", "code": "CA", "brand": "Lifepro", "day": "monday" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "Mexico", "code": "MX", "brand": "Lifepro", "day": "monday" },
+
+    { "store": "Joyberri LLC", "marketplace": "United States", "code": "US", "brand": "Joyberri", "day": "tuesday" },
+    { "store": "Joyberri LLC", "marketplace": "Canada", "code": "CA", "brand": "Joyberri", "day": "tuesday" },
+    { "store": "Joyberri LLC", "marketplace": "Mexico", "code": "MX", "brand": "Joyberri", "day": "tuesday" },
+
+    { "store": "Sunello", "marketplace": "United States", "code": "US", "brand": "Sunello", "day": "tuesday" },
+    { "store": "Sunello", "marketplace": "Canada", "code": "CA", "brand": "Sunello", "day": "tuesday" },
+    { "store": "Sunello", "marketplace": "Mexico", "code": "MX", "brand": "Sunello", "day": "tuesday" },
+
+    { "store": "LIFEPRO OUTLET", "marketplace": "United Kingdom", "code": "UK", "brand": "Lifepro", "day": "monday", "enabled": false, "why": "Europe: separate site and sign-in, not built yet" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "Germany", "code": "DE", "brand": "Lifepro", "day": "monday", "enabled": false, "why": "Europe: separate site and sign-in, not built yet" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "France", "code": "FR", "brand": "Lifepro", "day": "monday", "enabled": false, "why": "Europe: separate site and sign-in, not built yet" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "Italy", "code": "IT", "brand": "Lifepro", "day": "monday", "enabled": false, "why": "Europe: separate site and sign-in, not built yet" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "Spain", "code": "ES", "brand": "Lifepro", "day": "monday", "enabled": false, "why": "Europe: separate site and sign-in, not built yet" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "Netherlands", "code": "NL", "brand": "Lifepro", "day": "monday", "enabled": false, "why": "Europe: phase 3" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "Belgium", "code": "BE", "brand": "Lifepro", "day": "monday", "enabled": false, "why": "Europe: phase 3" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "Sweden", "code": "SE", "brand": "Lifepro", "day": "monday", "enabled": false, "why": "Europe: phase 3" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "Poland", "code": "PL", "brand": "Lifepro", "day": "monday", "enabled": false, "why": "Europe: phase 3" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "United Arab Emirates", "code": "AE", "brand": "Lifepro", "day": "monday", "enabled": false, "why": "Middle East: phase 3" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "Saudi Arabia", "code": "SA", "brand": "Lifepro", "day": "monday", "enabled": false, "why": "Middle East: phase 3" }
+  ]
+}

@@ -46,3 +46,12 @@ test('upsert: new, same, changed', () => {
   assert.equal(db.prepare('SELECT COUNT(*) n FROM reviews').get().n, 1);
   assert.equal(db.prepare('SELECT replied FROM reviews').get().replied, 1);
 });
+
+test('upsert keeps the view a review was first found in', () => {
+  const db = openDb(':memory:');
+  const r = toRow(sample);
+  upsertReview(db, r, { brand: 'Joyberri', store: 'Joyberri LLC', code: 'CA' });
+  upsertReview(db, { ...r, replied: 1 }, { brand: 'Lifepro', store: 'LIFEPRO OUTLET', code: 'US' });
+  const row = db.prepare('SELECT sheet_brand, store, marketplace, replied FROM reviews').get();
+  assert.deepEqual({ ...row }, { sheet_brand: 'Joyberri', store: 'Joyberri LLC', marketplace: 'CA', replied: 1 });
+});

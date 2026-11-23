@@ -1,8 +1,9 @@
 # Plan: more stores, marketplaces and a better sheet
 
-Status: **plan only, nothing built yet.** Last updated 18 Nov 2026 with
-Armando's answers. Today the scraper pulls one view (LIFEPRO OUTLET, United
-States) every Monday.
+Status (18 Nov 2026): **North America built and tested on the fake site.**
+Steps 1 to 7 below are done in the code. Left: paste the new sheet script and
+run `setup()`, first real runs by hand (step 8), install the new schedule,
+then Europe (step 9).
 
 ## What we're pulling
 
@@ -115,11 +116,22 @@ again. Before building:
    Sunello US. Check the sheet. Then turn on the schedule.
 9. **Europe** once access is granted: phase 2 markets first.
 
+## What step 1 found (18 Nov 2026)
+
+- Switching works by clicking: open the top bar, expand the store, click the
+  marketplace. Amazon then goes to Seller Central home; the script opens the
+  reviews page again and checks the top bar.
+- Joyberri LLC and Sunello both list Canada and Mexico (Sunello also Brazil, and
+  some "pending registration"). All are in views.json; an empty view just shows 0.
+- 90-day counts: Lifepro US ~1,044, Lifepro CA 88, Joyberri US 65, Sunello US 1.
+- LIFEPRO OUTLET already lists every Europe and Middle East marketplace, but
+  clicking United Kingdom goes to **sellercentral.amazon.co.uk and asks for a
+  new sign-in**. So Europe needs a second saved profile and its own
+  `npm run login`, as guessed below.
+
 ## Still open
 
-- Exact marketplaces per store in North America (does Joyberri / Sunello sell
-  in Canada and Mexico?). The selector will show this in step 1.
-- Europe / Middle East access (requested).
+- Europe / Middle East: build the second sign-in once access is confirmed.
 
 ## Risks
 
@@ -129,3 +141,12 @@ again. Before building:
 | Switching marketplace changes it for your open tabs | Runs at 6am; switches back to Lifepro US at the end |
 | A busy view passes 1,000 reviews in 90 days | Email warns when a view is near 1,000; weekly is fine for all today |
 | Europe needs another sign-in | Second saved profile; night-before check covers both |
+
+## Ratings (decided 22 Nov 2026)
+
+The reviews data includes each product's total ratings and average stars
+(`asinTotalReviewCount`, `asinWeightedStarRating`), but only for products that
+got a written review in the last 90 days. **Don't use it for ratings**: it
+misses products with star-only ratings. Ratings get their own scraper from a
+Seller Central page that lists every ASIN (page not picked yet), to be
+combined with reviews later.

@@ -3,19 +3,26 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Pulls our own Amazon reviews from Seller Central (Brands > Customer Reviews) into a local SQLite database.",
+  "description": "Pulls our own Amazon reviews from Seller Central (Brands > Customer Reviews) for several stores and marketplaces into SQLite and a Google Sheet.",
   "engines": {
     "node": ">=22.13"
   },
   "scripts": {
     "login": "node login.js",
+    "vc-login": "node vc-login.js",
+    "vc-pull": "node vc-pull.js",
+    "signin": "node signin.js",
+    "status": "node status.js",
     "pull": "node scrape.js",
     "remind": "node remind.js",
     "reparse": "node reparse.js",
     "export": "node export.js",
     "monthly": "node export.js --monthly",
     "stats": "node stats.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "families": "node families.js",
+    "kpi": "node kpi.js",
+    "check": "node check.js"
   },
   "dependencies": {
     "playwright": "1.49.1"

@@ -1,0 +1,14 @@
+{
+  "home": { "store": "LIFEPRO OUTLET", "marketplace": "United States" },
+  "views": [
+    { "store": "LIFEPRO OUTLET", "marketplace": "United States", "code": "US", "brand": "Lifepro", "day": "monday" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "Canada", "code": "CA", "brand": "Lifepro", "day": "monday" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "United Kingdom", "code": "UK", "brand": "Lifepro", "day": "monday" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "Germany", "code": "DE", "brand": "Lifepro", "day": "monday", "enabled": false },
+    { "store": "Joyberri LLC", "marketplace": "United States", "code": "US", "brand": "Joyberri", "day": "tuesday" },
+    { "store": "Joyberri LLC", "marketplace": "Canada", "code": "CA", "brand": "Joyberri", "day": "tuesday" },
+    { "store": "Sunello", "marketplace": "United States", "code": "US", "brand": "Sunello", "day": "tuesday" },
+    { "store": "Sunello", "marketplace": "Australia", "code": "AU", "brand": "Sunello", "day": "tuesday" },
+    { "store": "Sunello", "marketplace": "Mexico", "code": "MX", "brand": "Sunello", "day": "tuesday" }
+  ]
+}
