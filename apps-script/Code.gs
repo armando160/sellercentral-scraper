@@ -29,7 +29,7 @@ const HEADERS = ['Review ID', 'Review date', 'Month', 'Brand', 'Marketplace', 'S
 const COL = { month: 'C', brand: 'D', market: 'E', stars: 'F' };
 
 const BRANDS = ['Lifepro', 'Joyberri', 'Sunello'];
-const MARKETS = ['US', 'CA', 'MX', 'UK', 'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'SE', 'PL', 'AE', 'SA'];
+const MARKETS = ['US', 'CA', 'MX', 'UK', 'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'SE', 'PL', 'AE', 'SA', 'TR'];
 const MONTHS = 12; // month columns per table on the Monthly tab
 
 // Colors
@@ -41,6 +41,9 @@ const C = { navy: '#1F3A5F', navyText: '#FFFFFF', light: '#EEF3F8', line: '#C9D6
 function doPost(e) {
   const body = JSON.parse(e.postData.contents);
   if (body.token !== TOKEN) return json_({ ok: false, error: 'bad token' });
+
+  // Keepa history copy for the Mac: { keepa: {} }. Read only.
+  if (body.keepa) return json_(keepaExport_());
 
   // Status email from the Mac: { email: { subject, text, html, kind } }
   if (body.email) {
@@ -85,6 +88,34 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ---------------------------------------------------------------- Keepa copy
+
+// The teammate's "Review History - Keepa" sheet. The Mac copies three tabs
+// into its database (lib/keepa.js). This only READS that sheet.
+// The ID is not in this public repo: ./setup-sheets.sh script fills it in from the Keychain (keepa-sheet-id).
+const KEEPA_SHEET_ID = 'PASTE-KEEPA-SHEET-ID-HERE';
+
+function keepaExport_() {
+  const ss = SpreadsheetApp.openById(KEEPA_SHEET_ID); // only this sheet, whatever the request says
+  const tab = (name) => { const sh = ss.getSheetByName(name); return sh ? sh.getDataRange().getDisplayValues() : null; };
+  const runs = ss.getSheetByName('Runs');
+  return {
+    ok: true,
+    read_at: new Date().toISOString(),
+    keepa_updated: runs ? runs.getRange('B3').getDisplayValue() : null, // "Last successful update", Karachi time
+    state: tab('_state'),
+    meta: tab('_meta'),
+    sku_view: tab('ASIN-SKU-View'),
+  };
+}
+
+// Run this once from the editor after pasting the new code: Google asks to
+// allow reading other spreadsheets. Then deploy a new version.
+function authorizeKeepa() {
+  const out = keepaExport_();
+  Logger.log('Keepa sheet readable: ' + (out.state ? out.state.length - 1 : 0) + ' month rows, updated ' + out.keepa_updated);
 }
 
 // Text that starts with = + - @ would be read as a formula. Keep it as text.

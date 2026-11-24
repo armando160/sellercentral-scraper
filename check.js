@@ -14,10 +14,12 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { openDb } from './lib/db.js';
 import { rebuildKpis } from './lib/kpi.js';
+import { runKeepa } from './keepa-pull.js';
 import { notify } from './lib/notify.js';
 import { config } from './lib/config.js';
 import { loadViews, pickViews, viewName } from './lib/views.js';
 import { statusRows, STATUS_HEAD } from './lib/status.js';
+import { esc, htmlTable, H, P, UL, wrap } from './lib/emailhtml.js';
 
 const force = process.argv.includes('--force');
 const today = new Date().toLocaleDateString('en-CA');
@@ -46,7 +48,8 @@ for (const job of JOBS) {
   const ok = () => runs.some((r) => r.status === 'ok');
   if (ok()) { report.push({ job, state: 'ok', runs }); continue; }
   const last = runs.at(-1);
-  if (last?.status === 'login_needed') { report.push({ job, state: 'signed_out', runs }); continue; }
+  // A "signed out" reading is retried too: on 24 Nov 2026 the 6:00am pull said
+  // signed out while the saved sign-in was still good (see isSignedOut).
   // no status yet = still going, unless it started over 2 hours ago (it crashed)
   if (last && !last.status && Date.now() - new Date(last.started_at) < 2 * 3600e3) { report.push({ job, state: 'running', runs }); continue; }
   const retriesSoFar = Math.max(0, runs.length - 1);
@@ -55,6 +58,19 @@ for (const job of JOBS) {
   spawnSync(process.execPath, [job.script], { cwd: config.root, stdio: 'inherit' });
   runs = todaysRuns(job.table);
   report.push({ job, state: ok() ? 'fixed' : runs.at(-1)?.status === 'login_needed' ? 'signed_out' : 'failed', runs, retried: true });
+}
+
+// Keepa monthly history (lib/keepa.js): copy the teammate's sheet once a
+// morning. Same content as last time = nothing stored. Never a PROBLEM by
+// itself: Vendor Central is the main ratings source.
+let keepaNote = null;
+if (new Date().getHours() < 12) {
+  try {
+    const k = await runKeepa({ quiet: true });
+    keepaNote = k.repeat ? `Keepa history: no new copy (sheet last updated ${k.keepaUpdated ?? '?'}, Karachi time).`
+      : `Keepa history: new copy saved, ${k.months} ASIN-months (sheet updated ${k.keepaUpdated ?? '?'}, Karachi time).`;
+  } catch (e) { keepaNote = `Keepa history not copied: ${e.message}`; }
+  log(keepaNote);
 }
 
 let kpiNote = 'KPI tables rebuilt.';
@@ -82,22 +98,58 @@ const textTable = (head, rows) => {
   return [head, ...rows].map((r) => '  ' + r.map((c, i) => String(c).padEnd(w[i])).join('  ').trimEnd());
 };
 let dataTable = [];
-let kpiLines = [];
+let dataRows = null;
+let dataError = null;
+let kpiNewest = [];
 try {
   const db = openDb();
-  dataTable = textTable(STATUS_HEAD, statusRows(db));
+  dataRows = statusRows(db);
+  dataTable = textTable(STATUS_HEAD, dataRows);
   const k = db.prepare(`SELECT period_kind kind, MAX(period_start) newest FROM kpi_brand
     WHERE brand = 'All brands' GROUP BY 1`).all();
-  kpiLines = ['week', 'month'].map((kind) => `  Newest complete ${kind} in the KPI tables: ${k.find((x) => x.kind === kind)?.newest ?? 'none yet'}`);
+  kpiNewest = ['week', 'month'].map((kind) => [kind, k.find((x) => x.kind === kind)?.newest ?? 'none yet']);
   db.close();
-} catch (e) { dataTable = [`  (could not read: ${e.message})`]; }
+} catch (e) { dataError = `(could not read: ${e.message})`; dataTable = [`  ${dataError}`]; }
+const kpiLines = kpiNewest.map(([kind, d]) => `  Newest complete ${kind} in the KPI tables: ${d}`);
 const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short' });
+const headline = problem ? 'SOMETHING NEEDS YOU (details below).' : 'All good. Nothing to do.';
+const happened = report.map((r) => ({ name: r.job.name, said: explain[r.state],
+  note: lastNote(r) && r.state !== 'ok' && r.state !== 'fixed' ? lastNote(r) : null }));
+const why = problem || bad.length ? [
+  'The KPI tables (reviews and ratings per unit sold) need one Vendor Central snapshot per day and the',
+  'weekly Seller Central pull. A missed day is filled from the day before when possible (marked in the',
+  'tables); a missed week of Seller Central keeps that week "not complete" until the next pull.'] : null;
+const todo = bad.some((r) => r.state === 'signed_out') ? ['Sign in: double-click "Amazon Sign In" on the Desktop.'] :
+  bad.some((r) => ['failed', 'gave_up'].includes(r.state)) ? ['Usually nothing: retries are automatic. If this repeats 2 days in a row, look at the log:', path.join(config.root, 'logs')] :
+  ['Nothing.'];
+const about = [
+  'The daily check of the Amazon reviews project on this Mac. At 9:00am it checks that today\'s 6:00am',
+  'pulls worked, retries what failed, and always emails (subject starts with OK or PROBLEM). At 1:00pm',
+  'it checks again and emails only if something is still wrong.',
+  `Project folder: ${path.dirname(config.root)}`,
+];
+const para = (lines) => P(lines.join(' '));
+const html = wrap([
+  `<p style="font:bold 15px Arial,sans-serif;margin:4px 0 10px;color:${problem ? '#c00' : '#1a7f37'}">${esc(headline)}</p>`,
+  H('What happened'),
+  UL([...happened.map((h) => `<b>${esc(h.name)}</b>: ${esc(h.said)}${h.note ? `<br><span style="color:#555">Amazon/the script said: ${esc(h.note)}</span>` : ''}`), esc(kpiNote), ...(keepaNote ? [esc(keepaNote)] : [])]),
+  kpiNewest.length ? htmlTable(['KPI tables', 'Newest complete period'], kpiNewest.map(([kind, d]) => [kind === 'week' ? 'Week' : 'Month', d])) : '',
+  H('Latest data available'),
+  dataRows ? htmlTable(STATUS_HEAD, dataRows) : P(dataError),
+  why ? H('Why it matters') + para(why) : '',
+  H('What to do'),
+  P(todo[0]) + (todo[1] ? `<p style="font:12px Menlo,monospace;margin:4px 0">${esc(todo[1])}</p>` : ''),
+  H('About this email'),
+  `<p style="font:12px Arial,sans-serif;color:#555;margin:4px 0">${esc(about.slice(0, 3).join(' '))}<br>${esc(about[3])}</p>`,
+].join('\n'));
+
 const text = [
-  problem ? 'SOMETHING NEEDS YOU (details below).' : 'All good. Nothing to do.',
+  headline,
   '',
   'WHAT HAPPENED',
   ...report.map((r) => `  - ${r.job.name}: ${explain[r.state]}${lastNote(r) && r.state !== 'ok' && r.state !== 'fixed' ? `\n    Amazon/the script said: ${lastNote(r)}` : ''}`),
   `  - ${kpiNote}`,
+  ...(keepaNote ? [`  - ${keepaNote}`] : []),
   ...kpiLines,
   '',
   'LATEST DATA AVAILABLE',
@@ -122,6 +174,7 @@ const text = [
 
 const what = report.map((r) => `${r.job.key === 'vc' ? 'Vendor Central' : 'Seller Central'} ${r.state === 'ok' ? 'worked' : r.state.replace('_', ' ')}`).join(', ');
 await notify({
+  emailHtml: html,
   title: problem ? `PROBLEM, open now: ${what} (${dayName})`
     : bad.length ? `OK after a retry: ${what} (${dayName})` : `OK: ${what} (${dayName})`,
   short: report.map((r) => `${r.job.key.toUpperCase()}: ${r.state}`).join(', '),

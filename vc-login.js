@@ -31,7 +31,7 @@ console.log('\nA Chrome window opened.');
 console.log('1. Sign in to Vendor Central (tick "Keep me signed in" if offered).');
 console.log('2. Wait until the dashboard table is showing.');
 console.log('3. Optional, helps a lot: click the (i) next to "Customer review count",');
-console.log('   "Raw star ratings" and "Shipped Units", and open the Time period box once.');
+console.log('   "Raw star ratings" and "Ordered Units", and open the Time period box once.');
 await waitForEnter('\nPress Enter here when the table is showing... ');
 
 if (await needsLogin(page)) {

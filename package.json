@@ -22,7 +22,8 @@
     "test": "node --test test/*.test.js",
     "families": "node families.js",
     "kpi": "node kpi.js",
-    "check": "node check.js"
+    "check": "node check.js",
+    "keepa": "node keepa-pull.js"
   },
   "dependencies": {
     "playwright": "1.49.1"

@@ -3,6 +3,7 @@
 #   Every day 6:00am  Vendor Central pull (review counts, star ratings, units). Quiet unless a problem
 #   Monday 6:00am     Seller Central: pull Lifepro (views.json, day "monday"), then one email
 #   Tuesday 6:00am    Seller Central: pull Joyberri + Sunello (day "tuesday"), then one email
+#   Wednesday 6:00am  Seller Central: pull Lifepro UK, Saudi Arabia, Turkey (day "wednesday"), then one email
 #   Every day 9:00am + 1:00pm  daily check: did today's pulls work? retries failed ones, rebuilds KPIs. 9am always emails (subject starts OK or PROBLEM), 1pm only on problems
 #   Every day 6:00pm  evening check (plugged in? signed in?). Emails before pull days, or if something is wrong
 #
@@ -56,12 +57,12 @@ EOF
   launchctl bootstrap "gui/$(id -u)" "$AGENTS/$1.plist"
 }
 
-write_agent $PULL "1 2" 6 "<string>$NODE</string><string>$DIR/run-job.js</string><string>pull</string>"
+write_agent $PULL "1 2 3" 6 "<string>$NODE</string><string>$DIR/run-job.js</string><string>pull</string>"
 write_agent $VC "0 1 2 3 4 5 6" 6 "<string>$NODE</string><string>$DIR/run-job.js</string><string>vc</string>"
 write_agent $CHECK "0 1 2 3 4 5 6" "9 13" "<string>$NODE</string><string>$DIR/run-job.js</string><string>check</string>"
 write_agent $REMIND "0 1 2 3 4 5 6" 18 "<string>$NODE</string><string>$DIR/remind.js</string>"
 
-echo "Installed: daily 6:00am Vendor Central pull, Monday + Tuesday 6:00am review pulls, daily 9:00am + 1:00pm morning check, daily 6:00pm evening check."
+echo "Installed: daily 6:00am Vendor Central pull, Monday + Tuesday + Wednesday 6:00am review pulls, daily 9:00am + 1:00pm morning check, daily 6:00pm evening check."
 echo ""
 echo "Now make the Mac wake itself every morning (asks for your Mac password):"
 echo ""

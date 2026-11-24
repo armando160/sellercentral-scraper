@@ -9,19 +9,21 @@
 //   npm run pull -- --view="Joyberri LLC/CA"   one view (can repeat)
 //   npm run pull -- --all                 every enabled view
 //
-// It never signs in. If the session expired it stops and tells you to run
-// "npm run login".
+// Views can live on different Seller Central sites (US, UK, Saudi Arabia,
+// Turkey; see "sites" in views.json), each with its own sign-in. It never
+// signs in: if one site is signed out, only that site's views are skipped.
 //
 // Exit codes: 0 ok, 2 sign-in needed, 1 error (in at least one view).
 import fs from 'node:fs';
 import path from 'node:path';
-import { openBrowser, needsLogin, onReviewsData, findNext, clickNext, politeDelay, sleep } from './lib/browser.js';
+import { openBrowser, isSignedOut, onReviewsData, findNext, clickNext, politeDelay, sleep } from './lib/browser.js';
 import { selectView, checkView, SwitchError } from './lib/switcher.js';
 import { rowsFromResponse } from './lib/bcr.js';
 import { openDb, upsertReview, saveRaw, startRun, finishRun, saveViewRun, markMissing } from './lib/db.js';
 import { uploadToSheets } from './lib/sheets.js';
 import { notify, healthcheck } from './lib/notify.js';
-import { loadViews, pickViews, waitingViews, viewKey, viewName, reviewLink } from './lib/views.js';
+import { esc, htmlTable, H, P } from './lib/emailhtml.js';
+import { loadViews, pickViews, waitingViews, viewKey, viewName, reviewLink, siteName } from './lib/views.js';
 import { config } from './lib/config.js';
 import { takeLock } from './lib/lock.js';
 import { statusRows, STATUS_HEAD } from './lib/status.js';
@@ -103,9 +105,9 @@ async function pullView(view, res) {
   await selectView(page, view);
 
   cur = { view, res, loaded: 0, checked: false, queue: [] };
-  await page.goto(config.reviewsUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.goto(view.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await sleep(2500);
-  if (await needsLogin(page)) throw loginNeeded('Signed out. Run: npm run login');
+  if (await isSignedOut(page, { url: view.url, tag: viewName(view) })) throw loginNeeded('Signed out');
   await checkView(page, view);
   cur.checked = true;
   for (const [text, url] of cur.queue.splice(0)) take(text, url);
@@ -120,7 +122,7 @@ async function pullView(view, res) {
     if (!next) break;
     await politeDelay();
     await clickNext(page, next);
-    if (await needsLogin(page)) throw loginNeeded('Signed out mid-run. Run: npm run login');
+    if (await isSignedOut(page, { tag: viewName(view) })) throw loginNeeded('Signed out mid-run');
     if (!(await waitForPage(res.pages + 1))) {
       throw new Error(`Page ${res.pages + 1} didn't load. Screenshot: ${await snapshot(`${viewName(view)}-stuck-p${res.pages + 1}`)}`);
     }
@@ -129,13 +131,13 @@ async function pullView(view, res) {
 }
 
 const results = [];
-let signedOut = false;
+const signedOutSites = new Set(); // Seller Central sites that are signed out
 
 for (const [i, view] of views.entries()) {
   const res = { view, status: 'ok', pages: 0, seen: 0, new_reviews: 0, low_star_new: 0,
     amazon_total: null, note: null, newLowStar: [], stars: [0, 0, 0, 0, 0, 0], asins: new Map() };
   results.push(res);
-  if (signedOut) { res.status = 'not_run'; res.note = 'not run: signed out'; continue; }
+  if (signedOutSites.has(view.site)) { res.status = 'not_run'; res.note = `not run: ${siteName(data, view.site)} signed out`; continue; }
   if (i > 0) { await politeDelay(); await politeDelay(); } // a short break between views
   log(`${viewName(view)} (${view.store} / ${view.marketplace})`);
   const readStartedAt = new Date().toISOString();
@@ -145,7 +147,7 @@ for (const [i, view] of views.entries()) {
     if (res.missing) log(`  ${viewName(view)}: ${res.missing} saved reviews no longer on the page (removed?). Kept, marked missing.`);
   } catch (err) {
     const msg = String(err.message || err).split('\n')[0].slice(0, 300);
-    if (err.kind === 'login_needed') { res.status = 'login_needed'; signedOut = true; }
+    if (err.kind === 'login_needed') { res.status = 'login_needed'; signedOutSites.add(view.site); }
     else if (err instanceof SwitchError && (err.kind === 'not_available' || err.kind === 'other_site')) res.status = 'skipped';
     else res.status = 'error';
     res.note = msg;
@@ -158,7 +160,7 @@ for (const [i, view] of views.entries()) {
 
 // Leave the browser on the home view, so your own Seller Central tabs are back to normal.
 let homeNote = null;
-if (!signedOut) {
+if (!signedOutSites.has(data.home.site)) {
   try {
     await politeDelay();
     await selectView(page, data.home);
@@ -174,6 +176,8 @@ const sum = (k) => results.reduce((a, r) => a + (r[k] || 0), 0);
 const totals = { pages: sum('pages'), seen: sum('seen'), new_reviews: sum('new_reviews'),
   low_star_new: sum('low_star_new'), amazon_total: sum('amazon_total'), uploaded: 0 };
 const failed = results.filter((r) => r.status === 'error');
+const signedOut = signedOutSites.size > 0;
+const signedOutNames = [...signedOutSites].map((x) => siteName(data, x)).join(', ');
 let status = signedOut ? 'login_needed' : failed.length ? 'error' : 'ok';
 let note = [...results.filter((r) => r.note).map((r) => `${viewName(r.view)}: ${r.note}`), homeNote]
   .filter(Boolean).join(' | ') || null;
@@ -224,9 +228,11 @@ const totalAsins = new Set(results.flatMap((r) => [...r.asins.keys()])).size;
 // Headline and what to do, same in both versions.
 const intro = [];
 if (status === 'login_needed') {
-  intro.push(`The ${runName} pull stopped: Seller Central signed out.`, '',
-    'Fix (on the Mac, in Terminal):', `  cd "${config.root}"`, '  npm run login     (sign in, press Enter)',
-    `  npm run pull${dayArg ? ` -- --day=${dayArg}` : ''}`);
+  const got = results.filter((r) => r.status === 'ok').length;
+  intro.push(`The ${runName} pull is missing views: signed out of ${signedOutNames}.` +
+    (got ? ` The other ${got} views were pulled.` : ''), '',
+    'Fix: double-click "Amazon Sign In" on the Desktop and sign in where Chrome asks.',
+    "It re-runs today's pull by itself once you are in.");
 } else if (failed.length) {
   intro.push(`The ${runName} pull finished, but ${failed.length} of ${results.length} views FAILED (see below).`,
     'Screenshots are in the logs/ folder. To retry one view:',
@@ -281,15 +287,7 @@ if (lows.length) {
   }
 }
 
-// HTML
-const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const TD = 'padding:4px 8px;border-bottom:1px solid #e3e8ee;text-align:right';
-const htmlTable = (head, rows, boldLast = false) => `<table style="border-collapse:collapse;font:13px Arial,sans-serif;margin:6px 0 14px">
-<tr>${head.map((h, i) => `<th style="background:#1F3A5F;color:#fff;padding:5px 8px;text-align:${i && !['What', 'Source', 'Note'].includes(h) ? 'right' : 'left'}">${esc(h)}</th>`).join('')}</tr>
-${rows.map((r, k) => `<tr style="${boldLast && k === rows.length - 1 ? 'font-weight:bold;background:#DCE6F1' : k % 2 ? 'background:#f6f8fa' : ''}">${r.map((c, i) => `<td style="${TD};${i === 0 || ['What', 'Source', 'Note'].includes(head[i]) ? 'text-align:left' : ''}${String(c) === 'FAILED' || String(c) === 'SIGNED OUT' ? ';color:#c00;font-weight:bold' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('\n')}
-</table>`;
-const H = (t) => `<h3 style="font:bold 15px Arial,sans-serif;color:#1F3A5F;margin:18px 0 4px">${esc(t)}</h3>`;
-const P = (t) => `<p style="font:13px Arial,sans-serif;margin:4px 0">${esc(t)}</p>`;
+// HTML (helpers in lib/emailhtml.js)
 let html = `<div style="font:13px Arial,sans-serif;color:#222">`;
 html += intro.map((t) => (t.startsWith('  ') ? `<pre style="margin:2px 0">${esc(t)}</pre>` : P(t))).join('');
 html += H('New reviews this run') + htmlTable(viewHead, [...viewRows, totalRow], true);
@@ -304,12 +302,12 @@ if (lows.length) {
 }
 html += '</div>';
 
-const title = status === 'login_needed' ? `ACTION NEEDED: sign in (${runName} pull)`
+const title = status === 'login_needed' ? `ACTION NEEDED: sign in to ${signedOutNames} (${runName} pull)`
   : failed.length ? `${runName} pull: ${failed.length} of ${results.length} views FAILED`
     : uploadError ? `${runName} pull: Sheet upload FAILED`
       : `${runName}: ${fmt(totals.new_reviews)} new reviews on ${totalAsins} products, avg ${avgOf(totalStars)}`;
 const short = status === 'login_needed'
-  ? 'Seller Central signed out. Run "npm run login" on the Mac, then "npm run pull".'
+  ? `Signed out of ${signedOutNames}. Double-click "Amazon Sign In" on the Mac.`
   : `${totals.new_reviews} new reviews on ${totalAsins} products (avg ${avgOf(totalStars)} stars) across ${results.length} views.` +
     (failed.length ? ` FAILED: ${failed.map((r) => viewName(r.view)).join(', ')}.` : '');
 

@@ -9,7 +9,8 @@ Weekly job on one Mac that pulls Amazon reviews from Seller Central
 (Brands > Customer Reviews) for several **views** (store + marketplace, in
 `views.json`) into SQLite (`data/reviews.db`) and one Google Sheet, then emails
 one summary per run. Monday: LIFEPRO OUTLET US/CA/MX. Tuesday: Joyberri LLC and
-Sunello US/CA/MX. Europe / Middle East views exist but are `enabled: false`. Main use: reviews per month, by product and star,
+Sunello US/CA/MX. Wednesday: LIFEPRO OUTLET UK, Saudi Arabia (SA), Turkey (TR). Other Europe /
+Middle East views exist but are `enabled: false`. Main use: reviews per month, by product and star,
 for the Lifepro data team. Sellerlabs undercounts (~85/month vs ~350 real).
 
 ## How it works
@@ -89,9 +90,16 @@ tomorrow has no views). The Mac wakes via
   "Australia (pending registration)" (treated as not available).
 - Canada and Mexico work on sellercentral.amazon.com with the same sign-in.
 - **Europe (tested with United Kingdom) redirects to
-  sellercentral.amazon.co.uk and asks for a new sign-in.** The switcher
-  reports that as `other_site` and the view is skipped. Building Europe means
-  a second profile / sign-in for that site (see PLAN-expansion.md).
+  sellercentral.amazon.co.uk and asks for a new sign-in.** So views have a
+  `site` (views.json `"sites"`: NA, UK, SA = sellercentral.amazon.sa,
+  TR = sellercentral.amazon.com.tr; built 24 Nov 2026). The pull opens each
+  view on its own site and switches there. All sites share `.browser-profile/`
+  (cookies are per domain), each needs its own sign-in: `npm run signin`
+  checks every site enabled views use, `npm run login -- --site=UK` does one.
+  A signed-out site only skips its own views. If a click still lands on another
+  host, the switcher reports `other_site` and the view is skipped.
+- SA / TR hosts and the "Turkey" marketplace label were guesses on 24 Nov
+  2026; confirm after the first real sign-in.
 - `/brandcustomerreviews/api/context` returns the brands and
   `amazonLinks.home` (e.g. https://amazon.ca) for the current view.
 
@@ -116,8 +124,10 @@ Tests use `SECRETS_FROM_ENV=1` with `SECRET_<NAME>` env vars instead.
   ```
   Mock env: `MOCK_TOTAL`, `MOCK_EXTRA`, `MOCK_LOGGED_OUT=1`,
   `MOCK_FAIL="Joyberri LLC|Canada"` (that view's data returns 500).
-  The mock has the same top-bar selector (cookie `sel`); United Kingdom goes
-  to 127.0.0.1 (another host) to test `other_site`. Use
+  The mock has the same top-bar selector (cookie `sel`); UK / Saudi Arabia /
+  Turkey clicked on localhost go to 127.0.0.1 (another host, `other_site`).
+  127.0.0.1 plays the foreign site: set `SITE_URL_UK/SA/TR=http://127.0.0.1:8899/brand-customer-reviews/?includeDone=true&pageSize=50`.
+  `MOCK_FOREIGN_LOGGED_OUT=1` signs out only 127.0.0.1. Use
   `VIEWS_FILE=test/views.test.json` and `--day=monday|tuesday` or `--view=`.
 - `raw_responses` keeps every API response untouched: after changing
   `lib/bcr.js`, `npm run reparse` rebuilds rows without hitting Amazon.
@@ -156,11 +166,39 @@ Tests use `SECRETS_FROM_ENV=1` with `SECRET_<NAME>` env vars instead.
   NOTHING / ABOUT THIS EMAIL). Success is silent.
 - Mock: `test/mock-site.js` serves `/custom-analytics/dashboard/<id>`; env
   `MOCK_VC_LOGGED_OUT`, `MOCK_VC_PERIOD`, `MOCK_VC_RATINGS_DATE`, `MOCK_VC_NO_EXPORT`,
-  `MOCK_VC_DROP_COL`. Run with `VC_URL=http://localhost:PORT/custom-analytics/dashboard/test`
+  `MOCK_VC_DROP_COL`, `MOCK_VC_OLD_LAYOUT=1` (Shipped Units layout from before 23 Nov). Run with `VC_URL=http://localhost:PORT/custom-analytics/dashboard/test`
   `VC_PROFILE_DIR=... DB_PATH=...`. Real sample files are in `../samples/` (never commit them:
   this repo is public and they have sales data).
 - The dashboard has 4 tiles (A Month to date, B T12M, C last Week, D last Month); the
   pull scrolls so C and D load, tells them apart by the request's dateRanges type
   (RECURRINGLY/TRAILINGLY/WEEKLY/MONTHLY, `tilePeriod`), merges A+B into vc_rows and saves
-  every tile with Shipped Units into vc_units. A tile only lists ASINs that shipped in its period.
+  every tile with a unit column into vc_units. A tile only lists ASINs that sold in its period.
+- 23 Nov 2026: the tiles switched from Shipped Units (`QUANTITY_SHIPPED`) to Ordered Units
+  (`TOTAL_ORDERED_UNITS`, label "Net Ordered Units"), and columns moved. Columns are read by
+  id, never position. A tile may have either unit column or both; `units_date` = the oldest
+  unit column's date. vc_rows has `shipped_units` (old pulls) and `ordered_units` (new).
+  Only ASIN, Parent ASIN, review count and star rating are required.
 - Not built yet: units history, the KPI calculations (families, star-only, removed reviews).
+
+## Keepa monthly history (added 23 Nov 2026)
+
+- Source: a teammate's Apps Script fills the Google Sheet "Review History - Keepa"
+  (ID in the Keychain, item `keepa-sheet-id`; not in this public repo) from the Keepa API every Monday
+  ~6:20am Karachi time (Sunday ~9:20pm on this Mac). amazon.com only.
+- `lib/keepa.js` + `keepa-pull.js` (`npm run keepa`) copy three tabs as given:
+  `_state` (ASIN, month, month-end ratings, written) into `keepa_month_end`,
+  `_meta` into `keepa_asins`, `ASIN-SKU-View` into `keepa_sku_map`. One `keepa_pulls`
+  row per copy, raw JSON in `data/keepa/`; an identical copy only gets `repeat_of`.
+  View `keepa_month_latest` = newest copy per ASIN and month.
+- The Mac reads the sheet through OUR web app (`apps-script/Code.gs`, `body.keepa`,
+  read only, fixed sheet ID). After changing Code.gs: paste, run `authorizeKeepa()` once
+  (Google asks to read other sheets), deploy a new version.
+- `check.js` runs the copy every morning before the KPI rebuild; a failure is a note in
+  the email, never a PROBLEM.
+- KPI layer: `family_keepa_month` (rebuilt in `rebuildKpis`): per VC family and month,
+  Keepa count at month end (highest child), `raw_change`, `new_ratings` (NULL on a jump:
+  Amazon split/merged listings, thresholds `JUMP_UP` / `JUMP_DOWN`), and the VC count on
+  the month's last day when we have it.
+- Roles: Vendor Central daily = main ratings source from 19 Nov 2026; Keepa = history
+  before that, backup, and a monthly check. Seller Central = written reviews (Keepa's
+  written counts break on regroupings).

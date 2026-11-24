@@ -1,10 +1,10 @@
-# Plan: Vendor Central export (ratings, star rating, shipped units)
+# Plan: Vendor Central export (ratings, star rating, units)
 
 Status: **draft 3, 22 Nov 2026.** Built from 5 hand-downloaded exports (in
 `../samples/vendor-central/`, never in this public repo) and screenshots.
 Page: https://vendorcentral.amazon.com/custom-analytics/dashboard/01a20521-2769-7885-be72-fe3bc0a0d7ee
 **Built 22 Nov:** daily pull (`vc-pull.js`), easy sign-in (`signin.js`, Desktop file), evening check, status table. First real pull 22 Nov: 265 ASINs, counts as of 19 Nov, units through 18 Nov, Export file matches the page data.
-**Dashboard tiles (set up 22 Nov):** A "Reviews & Shipped Units" (Month to date, 265 ASINs), B "Ratings, 12 Months" (T12M, 387), C "Last Week" (top Week: Shipped + Ordered units, 288), D "Last Month" (top Month, 291). A table only lists ASINs that shipped a unit in its period, hence A + B together (388 ASINs). C and D only load when scrolled to; the pull scrolls. Units saved in `vc_units` (every copy kept, `complete` when Amazon's units date reaches the period end).
+**Dashboard tiles (set up 22 Nov):** A "Reviews & Shipped Units" (Month to date, 265 ASINs; switched to Ordered Units on 23 Nov, see below), B "Ratings, 12 Months" (T12M, 387), C "Last Week" (top Week: Shipped + Ordered units, 288), D "Last Month" (top Month, 291). A table only lists ASINs that shipped a unit in its period, hence A + B together (388 ASINs). C and D only load when scrolled to; the pull scrolls. Units saved in `vc_units` (every copy kept, `complete` when Amazon's units date reaches the period end).
 **Not built yet:** units history before Oct 2026, the KPI calculations.
 
 ## What the page recording showed (22 Nov)
@@ -19,7 +19,8 @@ The page loads its table in one data response (`/ca/metricdata/api/v1/metricdata
 | Is there an orders metric? | Only "Vendor funding customer orders" (B2B discounts only). Not usable. Also available: **Ordered units** (adjusted for returns), **Customer returns quantity**, **Customer Initiated Returned %** |
 | Does "Month to date" roll to December? | It's saved as `MTD`, a rolling choice (not fixed dates), so it should. Still checked on 1 Dec |
 | Time period choices | Daily (latest day), WTD, MTD, QTD, YTD, last 7/15/30 days, each of the last 4 weeks (Sun to Sat), last 3 months, quarters, years. Data goes back to **2013** |
-| Internal names | Customer review count = `TOTAL_RATING_COUNT`, Raw star ratings = `RAW_RATING`, Shipped Units = `QUANTITY_SHIPPED` |
+| Internal names | Customer review count = `TOTAL_RATING_COUNT`, Raw star ratings = `RAW_RATING`, Shipped Units = `QUANTITY_SHIPPED`, Ordered Units = `TOTAL_ORDERED_UNITS` (label "Net Ordered Units") |
+| Change on 23 Nov 2026 | The tables now show **Ordered Units instead of Shipped Units**, and columns moved. The pull reads columns by id, takes either unit column (or both), and only requires ASIN, Parent ASIN, review count and star rating. Older pulls keep their shipped units; newer ones save ordered units |
 | Watch out | The page sends activity reports to Amazon ("tricorder") all the time. Act like a person: few clicks, normal pauses |
 
 ## Goal
@@ -148,7 +149,7 @@ Rule: **save exactly what Amazon gave, with its dates. Calculate later.** Never 
 | Table | One row per | Columns |
 |---|---|---|
 | `vc_exports` | Download | id, downloaded at, data last updated, period start, period end, fulfillment channel, view, metrics list, file name, hash, row count, status |
-| `vc_rows` | ASIN in a download | export id, ASIN, parent ASIN, item name, both brand columns, color, review count, star rating, shipped units, the untouched row as JSON |
+| `vc_rows` | ASIN in a download | export id, ASIN, parent ASIN, item name, both brand columns, color, review count, star rating, shipped units (until 23 Nov), ordered units (from 23 Nov), the untouched row as JSON |
 | `vc_families` | Family on a day | date, family id, parent ASIN, ASINs in it, review count, star rating |
 | `reviews` | Written review (exists) | + `last_seen_at`, `missing_since`, `removed_between` (see removed reviews) |
 

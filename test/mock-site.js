@@ -5,11 +5,16 @@
 //     class "end" when disabled), 50 per page, max 20 pages
 //   - the top-bar store / marketplace selector (same class names): the arrow
 //     icon expands a store, clicking a marketplace switches (cookie) and goes
-//     to /home; United Kingdom goes to another host's sign-in page
+//     to /home. Foreign marketplaces (UK, Saudi Arabia, Turkey) clicked on
+//     localhost go to 127.0.0.1's sign-in page, like the real site sending you
+//     to sellercentral.amazon.co.uk. 127.0.0.1 plays "the foreign site": there
+//     they switch normally (set SITE_URL_UK/SA/TR to http://127.0.0.1:PORT/...).
 // Plus a fake Apps Script endpoint at /sheets that stores rows by Review ID.
 //   node test/mock-site.js 8899
 // Env: MOCK_TOTAL (Lifepro US reviews, default 130), MOCK_EXTRA (new ones on top),
-//      MOCK_LOGGED_OUT=1 (show a sign-in page), MOCK_FAIL="Joyberri LLC|Canada" (that view's data fails)
+//      MOCK_LOGGED_OUT=1 (show a sign-in page), MOCK_FAIL="Joyberri LLC|Canada" (that view's data fails),
+//      MOCK_FOREIGN_LOGGED_OUT=1 (only 127.0.0.1, the foreign site, is signed out),
+//      MOCK_SIGNIN_BOUNCE=1 (first visit passes through /ap/signin for 4s, then comes back)
 // Vendor Central dashboard at /custom-analytics/dashboard/<id> (same data path,
 // fields, header text and Export button as the real one, checked 2026-11-22).
 // Env: MOCK_VC_LOGGED_OUT=1, MOCK_VC_PERIOD (period text), MOCK_VC_RATINGS_DATE
@@ -26,7 +31,7 @@ const sheet = new Map();
 const STORES = {
   'High Cloud Sales': { 'United States': 5 },
   'Joyberri LLC': { 'United States': 60, 'Canada': 0, 'Mexico': 2 },
-  'LIFEPRO OUTLET': { 'Australia': 0, 'Canada': 12, 'Mexico': 3, 'United Kingdom': 0, 'United States': null },
+  'LIFEPRO OUTLET': { 'Australia': 0, 'Canada': 12, 'Mexico': 3, 'Saudi Arabia': 4, 'Turkey': 2, 'United Kingdom': 6, 'United States': null },
   'Sunello': { 'Australia (pending registration)': 0, 'Canada': 4, 'United States': 1 },
 };
 const DEFAULT = 'LIFEPRO OUTLET|United States';
@@ -83,7 +88,9 @@ list.onclick = (e) => {
   if (icon) { const s = icon.parentElement.title; open.has(s) ? open.delete(s) : open.add(s); render(); return; }
   const it = e.target.closest('.dropdown-account-switcher-list-item-indented');
   if (!it) return;
-  if (it.title === 'United Kingdom') { location.href = location.protocol + '//127.0.0.1:' + location.port + '/ap/signin?uk=1'; return; }
+  if (['United Kingdom', 'Saudi Arabia', 'Turkey'].includes(it.title) && location.hostname !== '127.0.0.1') {
+    location.href = location.protocol + '//127.0.0.1:' + location.port + '/ap/signin?uk=1'; return;
+  }
   document.cookie = 'sel=' + encodeURIComponent(it.dataset.store + '|' + it.title) + '; path=/';
   setTimeout(() => { location.href = '/home?mons_sel_mkid=x'; }, 300);
 };
@@ -127,7 +134,7 @@ const VC_ROWS = [
 ];
 // Tables like the real dashboard (MOCK_VC_TILES=1 gives only the first one).
 const VC_TILES = [
-  { name: 'Reviews & Shipped Units', period: 'Month to date: Nov 1, 2026 (Nov) - Nov 19, 2026', range: { fromDate: '20261101', toDate: '20261119', type: 'RECURRINGLY' }, ratings: true },
+  { name: 'Reviews & Units', period: 'Month to date: Nov 1, 2026 (Nov) - Nov 19, 2026', range: { fromDate: '20261101', toDate: '20261119', type: 'RECURRINGLY' }, ratings: true },
   { name: 'Ratings, 12 Months', period: 'Last 12 months: Nov 1, 2025 - Oct 31, 2026', range: { fromDate: '20251101', toDate: '20261031', type: 'TRAILINGLY' }, ratings: true, extra: true },
   { name: 'Last Week', period: 'Week of Nov 8, 2026 - Nov 14, 2026', range: { fromDate: '20261108', toDate: '20261114', type: 'WEEKLY' } },
   { name: 'Last Month', period: 'Oct 2026 > Oct 1, 2026 - Oct 31, 2026', range: { fromDate: '20261001', toDate: '20261031', type: 'MONTHLY' } },
@@ -137,11 +144,15 @@ function vcData(body) {
   const [y, m, d] = (process.env.MOCK_VC_RATINGS_DATE || '2026-11-19').split('-').map(Number);
   const units = { year: y, month: m, day: d - 1 };
   const tile = VC_TILES.find((t) => t.range.fromDate === body?.dateRanges?.[0]?.fromDate) || VC_TILES[0];
+  // Since 23 Nov 2026 the rating tables have Ordered Units (moved) instead of
+  // Shipped Units. MOCK_VC_OLD_LAYOUT=1 gives the layout from before.
   const ids = (tile.ratings
-    ? ['ASIN', 'ITEM_NAME', 'TOTAL_RATING_COUNT', 'RAW_RATING', 'PREFERRED_DISPLAY_NAME', 'PARENT_ASIN', 'COLOR_NAME', 'QUANTITY_SHIPPED', 'BRAND_NAME']
-    : ['ASIN', 'ITEM_NAME', 'PARENT_ASIN', 'QUANTITY_SHIPPED', 'TOTAL_ORDERED_UNITS']).filter((c) => c !== process.env.MOCK_VC_DROP_COL);
+    ? (process.env.MOCK_VC_OLD_LAYOUT
+      ? ['ASIN', 'ITEM_NAME', 'TOTAL_RATING_COUNT', 'RAW_RATING', 'PREFERRED_DISPLAY_NAME', 'PARENT_ASIN', 'COLOR_NAME', 'QUANTITY_SHIPPED', 'BRAND_NAME']
+      : ['ASIN', 'ITEM_NAME', 'TOTAL_ORDERED_UNITS', 'TOTAL_RATING_COUNT', 'RAW_RATING', 'PREFERRED_DISPLAY_NAME', 'PARENT_ASIN', 'COLOR_NAME', 'BRAND_NAME'])
+    : ['ASIN', 'ITEM_NAME', 'PARENT_ASIN', 'TOTAL_ORDERED_UNITS', 'QUANTITY_SHIPPED']).filter((c) => c !== process.env.MOCK_VC_DROP_COL);
   let rows = VC_ROWS.map((r) => Object.fromEntries(Object.entries({ ...r, TOTAL_ORDERED_UNITS: r.QUANTITY_SHIPPED }).filter(([k]) => ids.includes(k))));
-  if (tile.extra) rows = rows.concat([{ ASIN: 'B0TESTOLD1', ITEM_NAME: 'Old product', PARENT_ASIN: 'B0TESTOLDP', TOTAL_RATING_COUNT: '40', RAW_RATING: '3.90', PREFERRED_DISPLAY_NAME: 'TestBrand', COLOR_NAME: '', QUANTITY_SHIPPED: '3', BRAND_NAME: 'TestBrand' }]);
+  if (tile.extra) rows = rows.concat([Object.fromEntries(Object.entries({ ASIN: 'B0TESTOLD1', ITEM_NAME: 'Old product', PARENT_ASIN: 'B0TESTOLDP', TOTAL_RATING_COUNT: '40', RAW_RATING: '3.90', PREFERRED_DISPLAY_NAME: 'TestBrand', COLOR_NAME: '', QUANTITY_SHIPPED: '3', TOTAL_ORDERED_UNITS: '3', BRAND_NAME: 'TestBrand' }).filter(([k]) => ids.includes(k)))]);
   return { metricsData: {
     metadata: { fromRow: 0, toRow: 5000, sortDirection: 'DESC', sortMetricId: 'QUANTITY_SHIPPED', commonDate: { day: d, month: m, year: y } },
     data: { rowData: rows, totalsData: {} },
@@ -214,7 +225,20 @@ http.createServer((req, res) => {
   }
 
   if (process.env.MOCK_LOGGED_OUT === '1') return send(200, 'text/html', '<input id="ap_email" type="email">');
+  if (process.env.MOCK_FOREIGN_LOGGED_OUT === '1' && (req.headers.host || '').startsWith('127.0.0.1')) {
+    return send(200, 'text/html', '<input id="ap_email" type="email">');
+  }
 
+  // MOCK_SIGNIN_BOUNCE=1: the first visit passes through /ap/signin for 4 seconds
+  // (no form) and comes back by itself, like Amazon re-checking a good session.
+  if (url.pathname === '/ap/signin' && url.searchParams.get('bounce')) {
+    res.writeHead(200, { 'content-type': 'text/html', 'set-cookie': 'bounced=1; path=/' });
+    return res.end(`<p>One moment...</p><script>setTimeout(() => { location.href = ${JSON.stringify(url.searchParams.get('return'))}; }, 4000)</script>`);
+  }
+  if (process.env.MOCK_SIGNIN_BOUNCE === '1' && url.pathname.startsWith('/brand-customer-reviews') && !/(^|; )bounced=1/.test(req.headers.cookie || '')) {
+    res.writeHead(302, { location: `/ap/signin?bounce=1&return=${encodeURIComponent(url.pathname + url.search)}` });
+    return res.end();
+  }
   if (url.pathname === '/ap/signin') return send(200, 'text/html', '<input id="ap_email" type="email">');
   if (url.pathname === '/home') return send(200, 'text/html', `<!doctype html><html><body>${header(selOf(req))}<h1>Home</h1></body></html>`);
   if (url.pathname === '/brandcustomerreviews/api/reviews') {

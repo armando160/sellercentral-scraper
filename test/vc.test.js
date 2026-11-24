@@ -78,3 +78,63 @@ test('table periods from the request the page sent', () => {
   assert.equal(k({ fromDate: '20261101', toDate: '20261119', type: 'RECURRINGLY' }), 'mtd');
   assert.equal(tilePeriod(null).kind, 'unknown');
 });
+
+// Since 23 Nov 2026: Ordered Units instead of Shipped Units, in another place.
+const newLayout = (() => {
+  const cols = ['ASIN', 'ITEM_NAME', 'TOTAL_ORDERED_UNITS', 'TOTAL_RATING_COUNT', 'RAW_RATING', 'PARENT_ASIN', 'COLOR_NAME'];
+  const d19 = { day: 19, month: 11, year: 2026 };
+  return { metricsData: {
+    metadata: { commonDate: d19 },
+    data: { rowData: sample.metricsData.data.rowData.map(({ QUANTITY_SHIPPED, ...r }) => ({ ...r, TOTAL_ORDERED_UNITS: String(Number(QUANTITY_SHIPPED) + 1) })) },
+    schema: { columns: cols.map((c) => ({ columnId: c, columnLabel: c === 'TOTAL_ORDERED_UNITS' ? 'Net Ordered Units' : c, dataSetDate: d19 })) },
+  } };
+})();
+
+test('Ordered Units instead of Shipped Units, columns in another order', () => {
+  const p = parseMetricData(newLayout);
+  assert.deepEqual(p.missing, []);
+  assert.equal(p.hasUnits, true);
+  assert.equal(p.unitsDate, '2026-11-19');
+  assert.equal(p.shippedDate, null);
+  assert.equal(p.rows[0].ordered_units, 51);
+  assert.equal(p.rows[0].shipped_units, null);
+  assert.equal(p.rows[0].rating_count, 1200);
+  const db = openDb(':memory:');
+  const id = startVcPull(db); saveVcRows(db, id, p);
+  assert.equal(db.prepare('SELECT ordered_units FROM vc_rows WHERE asin = ?').get('B0TESTCHL1').ordered_units, 51);
+  // The old Export file (Shipped Units) still matches on the columns both have.
+  const buf = fs.readFileSync(new URL('./fixtures/vc-export.xlsx', import.meta.url));
+  assert.deepEqual(compareExport(buf, p.rows), { ok: true, note: '' });
+});
+
+test('a table with both unit columns: units date is the older one', () => {
+  const cols = ['ASIN', 'QUANTITY_SHIPPED', 'TOTAL_ORDERED_UNITS'];
+  const p = parseMetricData({ metricsData: { metadata: {}, data: { rowData: [{ ASIN: 'A', QUANTITY_SHIPPED: '5', TOTAL_ORDERED_UNITS: '7' }] },
+    schema: { columns: cols.map((c) => ({ columnId: c, dataSetDate: c === 'QUANTITY_SHIPPED' ? { day: 18, month: 11, year: 2026 } : { day: 19, month: 11, year: 2026 } })) } } });
+  assert.equal(p.unitsDate, '2026-11-18');
+  assert.equal(p.rows[0].shipped_units, 5);
+  assert.equal(p.rows[0].ordered_units, 7);
+});
+
+test('old layout without unit columns still has no missing columns', () => {
+  const p = parseMetricData({ metricsData: { metadata: {}, data: { rowData: [] },
+    schema: { columns: ['ASIN', 'PARENT_ASIN', 'TOTAL_RATING_COUNT', 'RAW_RATING'].map((c) => ({ columnId: c })) } } });
+  assert.deepEqual(p.missing, []);
+  assert.equal(p.hasUnits, false);
+  assert.equal(p.unitsDate, null);
+});
+
+test('migration adds ordered_units to an old vc_rows table', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const tmp = (await import('node:path')).join((await import('node:os')).tmpdir(), `vc-old-${process.pid}.db`);
+  const old = new DatabaseSync(tmp);
+  old.exec(`CREATE TABLE vc_rows (pull_id INTEGER NOT NULL, asin TEXT NOT NULL, parent_asin TEXT, item_name TEXT,
+    brand_display TEXT, brand_name TEXT, color TEXT, rating_count INTEGER, raw_rating REAL, shipped_units INTEGER,
+    raw TEXT NOT NULL, PRIMARY KEY (pull_id, asin))`);
+  old.close();
+  try {
+    const db = openDb(tmp);
+    assert.ok(db.prepare('PRAGMA table_info(vc_rows)').all().some((c) => c.name === 'ordered_units'));
+    db.close();
+  } finally { for (const x of ['', '-wal', '-shm']) fs.rmSync(tmp + x, { force: true }); }
+});

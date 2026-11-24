@@ -7,10 +7,13 @@
 // file too. All saved untouched; the rows go into data/reviews.db.
 //
 // The tables (set up 22 Nov 2026, see PLAN-vendor-central.md):
-//   A "Reviews & Shipped Units"  Month to date   review count + rating (new launches)
+//   A "Reviews & Units"          Month to date   review count + rating (new launches)
 //   B "Ratings, 12 Months"       Trailing 12 mo  review count + rating (everything that sold in a year)
-//   C "Last Week"                last full week  shipped + ordered units
-//   D "Last Month"               last full month shipped + ordered units
+//   C "Last Week"                last full week  ordered (+ shipped) units
+//   D "Last Month"               last full month ordered (+ shipped) units
+// Since 23 Nov 2026 the tables have Ordered Units instead of Shipped Units.
+// Columns are read by Amazon's column id, so their order doesn't matter, and
+// a table can have either unit column or both.
 //
 // Quiet when all is well (one line in the log). Emails only when something
 // needs you, and every email explains what this is and what to do.
@@ -20,7 +23,7 @@
 // Exit codes: 0 ok, 2 sign-in needed, 1 error.
 import fs from 'node:fs';
 import path from 'node:path';
-import { openBrowser, needsLogin, sleep } from './lib/browser.js';
+import { openBrowser, isSignedOut, sleep } from './lib/browser.js';
 import { openDb } from './lib/db.js';
 import { notify } from './lib/notify.js';
 import { takeLock } from './lib/lock.js';
@@ -40,7 +43,7 @@ const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const ABOUT = [
   'What this is: every morning this Mac opens your Vendor Central dashboard',
   '"Armando Review & Rating View" and saves the review count, star rating and',
-  'shipped units for every ASIN. With the written reviews (Seller Central, weekly)',
+  'units (ordered, and shipped if shown) for every ASIN. With the written reviews (Seller Central, weekly)',
   'this gives star-only ratings, reviews per unit, and removed reviews.',
   `Project folder: ${path.dirname(config.root)}`,
   'Details: sellercentral-scraper/PLAN-vendor-central.md',
@@ -90,10 +93,10 @@ page.on('response', async (res) => {
 const EXPECTED = ['mtd', 'trailing12', 'week', 'month'];
 const SETUP_FIX = '1. Open the dashboard:\n   ' + config.vcUrl +
   '\n2. It should have 4 tables (tiles), each with its Time Period(s) picked from the list:' +
-  '\n   A "Reviews & Shipped Units": Month to date. Metrics: ASIN, Customer review count, Raw star ratings,' +
-  '\n     Brand name, Parent ASIN, Color Name, Shipped Units, Brand Name' +
+  '\n   A "Reviews & Units": Month to date. Metrics: ASIN, Customer review count, Raw star ratings,' +
+  '\n     Brand name, Parent ASIN, Color Name, Ordered Units, Brand Name (any order)' +
   '\n   B "Ratings, 12 Months": T12M (under Trailing). Same metrics as A' +
-  '\n   C "Last Week": the top Week. Metrics: ASIN, Parent ASIN, Shipped Units, Ordered units' +
+  '\n   C "Last Week": the top Week. Metrics: ASIN, Parent ASIN, Ordered Units (Shipped Units optional)' +
   '\n   D "Last Month": the top Month. Same metrics as C' +
   '\n3. Check it says "Saved" at the top. Nothing else: tomorrow\'s pull picks it up.';
 
@@ -114,11 +117,11 @@ try {
   await page.goto(config.vcUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await pause(3, 6);
 
-  if (await needsLogin(page)) {
+  if (await isSignedOut(page, { url: config.vcUrl, tag: 'vendorcentral' })) {
     await fail('login_needed', 'Vendor Central is signed out', {
       title: 'ACTION NEEDED: sign in', short: 'Vendor Central is signed out. Double-click "Amazon Sign In" on the Desktop.',
       what: "This morning's Vendor Central pull found Vendor Central signed out,\nso nothing was saved today.",
-      why: "The review count only exists for the current day: today's is lost if nobody signs in.\nShipped units are not lost (they can be pulled later).",
+      why: "The review count only exists for the current day: today's is lost if nobody signs in.\nUnits are not lost (they can be pulled later).",
       fix: SIGN_IN_STEPS.join('\n'),
       ifIgnored: 'It tries again every morning and sends this email each day until you sign in.',
     }, 2);
@@ -159,7 +162,7 @@ try {
     return { ...parseMetricData(t.text), period: tilePeriod(t.req), file };
   });
   const ratingTiles = parsedTiles.filter((t) => t.has('TOTAL_RATING_COUNT'));
-  const unitTiles = parsedTiles.filter((t) => t.has('QUANTITY_SHIPPED'));
+  const unitTiles = parsedTiles.filter((t) => t.hasUnits);
   const missingKinds = EXPECTED.filter((k) => !parsedTiles.some((t) => t.period.kind === k));
   const broken = ratingTiles.flatMap((t) => t.missing);
   if (!ratingTiles.length || broken.length) {
@@ -180,7 +183,10 @@ try {
   for (const t of ratingTiles) {
     for (const r of t.rows) {
       const had = byAsin.get(r.asin);
-      if (!had) byAsin.set(r.asin, { ...r, shipped_units: t.period.kind === 'mtd' ? r.shipped_units : null });
+      if (!had) {
+        const mtd = t.period.kind === 'mtd';
+        byAsin.set(r.asin, { ...r, shipped_units: mtd ? r.shipped_units : null, ordered_units: mtd ? r.ordered_units : null });
+      }
       else if (had.rating_count !== r.rating_count || had.raw_rating !== r.raw_rating) disagree++;
     }
   }

@@ -2,7 +2,8 @@
 // tonight instead of being found in the morning:
 //   1. Is the Mac plugged in?
 //   2. Is Vendor Central still signed in? (daily pull at 6:00am)
-//   3. Before a Seller Central pull day (Monday, Tuesday): is Seller Central signed in?
+//   3. Before a Seller Central pull day (Monday, Tuesday): is every Seller Central
+//      site tomorrow's views use (US, UK, Saudi Arabia, Turkey) signed in?
 // The pages are opened out of sight.
 //
 // Emails: always the evening before a Seller Central pull ("all good" or
@@ -10,16 +11,17 @@
 //   npm run remind            (add --force to email even when all is good)
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
-import { openBrowser, needsLogin, sleep } from './lib/browser.js';
+import { openBrowser, needsLogin, isSignedOut, sleep } from './lib/browser.js';
 import { notify } from './lib/notify.js';
 import { config } from './lib/config.js';
 import { takeLock } from './lib/lock.js';
-import { loadViews, pickViews, viewName } from './lib/views.js';
+import { loadViews, pickViews, viewName, sitesFor } from './lib/views.js';
 
 const force = process.argv.includes('--force');
 const tomorrow = new Date(Date.now() + 864e5);
 const dayName = tomorrow.toLocaleDateString('en-US', { weekday: 'long' });
-const scViews = pickViews(loadViews(), [], tomorrow);
+const viewData = loadViews();
+const scViews = pickViews(viewData, [], tomorrow);
 const scTomorrow = scViews.length > 0;
 
 let batt = '';
@@ -32,7 +34,7 @@ async function isSignedIn(url, profileDir) {
     const { context, page } = await openBrowser({ headless: true, profileDir });
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(3000);
-    const out = !(await needsLogin(page)) && new URL(page.url()).host === new URL(url).host;
+    const out = !(await isSignedOut(page, { url, tag: new URL(url).host })) && !(await needsLogin(page)) && new URL(page.url()).host === new URL(url).host;
     await context.close();
     return out;
   } catch { return null; }
@@ -40,16 +42,20 @@ async function isSignedIn(url, profileDir) {
 
 const release = await takeLock('Evening check', { maxWaitMin: 20 });
 const vc = await isSignedIn(config.vcUrl, config.vcProfileDir);
-const sc = scTomorrow ? await isSignedIn(config.reviewsUrl, config.profileDir) : 'not needed';
+const scSites = [];
+for (const s of sitesFor(viewData, scViews)) scSites.push({ ...s, state: await isSignedIn(s.url, config.profileDir) });
 release?.();
 
 const problems = [];
 if (plugged === false) problems.push(`NOT plugged in (battery ${battery}%). The Mac must be plugged in, lid open, to wake at 6:00am.`);
 if (vc === false) problems.push("Vendor Central signed out. Tomorrow's daily review count would be lost.");
 if (vc === null) problems.push("Couldn't check Vendor Central (no internet?).");
-if (sc === false) problems.push(`Seller Central signed out. Tomorrow's review pull (${scViews.map(viewName).join(', ')}) would fail.`);
-if (sc === null) problems.push("Couldn't check Seller Central (no internet?).");
-const signedOut = vc === false || sc === false;
+for (const s of scSites) {
+  const lost = scViews.filter((v) => v.site === s.site).map(viewName).join(', ');
+  if (s.state === false) problems.push(`${s.name} signed out. Tomorrow these views would be skipped: ${lost}.`);
+  if (s.state === null) problems.push(`Couldn't check ${s.name} (no internet?).`);
+}
+const signedOut = vc === false || scSites.some((s) => s.state === false);
 
 // On days without a Seller Central pull, don't nag about power alone.
 const worthEmail = scTomorrow || force || signedOut || vc === null;
@@ -69,7 +75,7 @@ const text = problems.length
         '     The window closes by itself when you are in.'] : []),
       ...(plugged === false ? ['', 'POWER', '  Plug the Mac in and leave the lid open tonight.'] : [])]
   : [tomorrowLine, '', '  - Plugged in: yes', '  - Vendor Central signed in: yes',
-      ...(scTomorrow ? ['  - Seller Central signed in: yes'] : []), '', 'Leave the Mac plugged in with the lid open tonight.'];
+      ...scSites.map((s) => `  - ${s.name} signed in: yes`), '', 'Leave the Mac plugged in with the lid open tonight.'];
 text.push('', 'ABOUT THIS EMAIL',
   "An evening check from the Amazon reviews project on this Mac. It checks that tomorrow's",
   'morning pulls can run: power, and that the saved Amazon sign-ins still work.',

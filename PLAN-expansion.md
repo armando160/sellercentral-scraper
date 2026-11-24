@@ -131,7 +131,9 @@ again. Before building:
 
 ## Still open
 
-- Europe / Middle East: build the second sign-in once access is confirmed.
+- 24 Nov 2026: **UK, Saudi Arabia and Turkey built** (Wednesday, Lifepro), per-site
+  sign-in in the same profile. Left: first real sign-in on each site and a
+  run by hand. Rest of Europe and UAE still off.
 
 ## Risks
 
