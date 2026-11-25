@@ -23,7 +23,8 @@
 // Exit codes: 0 ok, 2 sign-in needed, 1 error.
 import fs from 'node:fs';
 import path from 'node:path';
-import { openBrowser, isSignedOut, sleep } from './lib/browser.js';
+import { spawnSync } from 'node:child_process';
+import { openBrowser, isSignedOut, confirmSignedOut, sleep } from './lib/browser.js';
 import { openDb } from './lib/db.js';
 import { notify } from './lib/notify.js';
 import { takeLock } from './lib/lock.js';
@@ -118,6 +119,24 @@ try {
   await pause(3, 6);
 
   if (await isSignedOut(page, { url: config.vcUrl, tag: 'vendorcentral' })) {
+    // Second opinion in a fresh Chrome before any "signed out" email
+    // (see confirmSignedOut). Signed in after all = run once more right now.
+    // Can't tell = no email; the morning check retries failed pulls.
+    await context.close().catch(() => {});
+    const verdict = await confirmSignedOut({ url: config.vcUrl, profileDir: config.vcProfileDir, tag: 'vendorcentral' });
+    log(`Second check: ${{ signed_out: 'really signed out', signed_in: 'signed in after all', unknown: "can't tell (internet?)" }[verdict]}.`);
+    if (verdict !== 'signed_out') {
+      finishVcPull(db, pullId, { status: 'error', note: verdict === 'signed_in'
+        ? 'Sign-in page shown, but a fresh browser was signed in. Ran again.'
+        : 'Sign-in page shown, second check could not confirm it (internet?)' });
+      db.close();
+      release();
+      if (verdict === 'signed_in' && !process.argv.includes('--second-try')) {
+        const r = spawnSync(process.execPath, [process.argv[1], '--second-try'], { cwd: config.root, stdio: 'inherit' });
+        process.exit(r.status ?? 1);
+      }
+      process.exit(1);
+    }
     await fail('login_needed', 'Vendor Central is signed out', {
       title: 'ACTION NEEDED: sign in', short: 'Vendor Central is signed out. Double-click "Amazon Sign In" on the Desktop.',
       what: "This morning's Vendor Central pull found Vendor Central signed out,\nso nothing was saved today.",

@@ -14,6 +14,7 @@
 // Env: MOCK_TOTAL (Lifepro US reviews, default 130), MOCK_EXTRA (new ones on top),
 //      MOCK_LOGGED_OUT=1 (show a sign-in page), MOCK_FAIL="Joyberri LLC|Canada" (that view's data fails),
 //      MOCK_FOREIGN_LOGGED_OUT=1 (only 127.0.0.1, the foreign site, is signed out),
+//      MOCK_FOREIGN_FLAKY_SEC=N / MOCK_VC_FLAKY_SEC=N (signed out only for the first N seconds),
 //      MOCK_SIGNIN_BOUNCE=1 (first visit passes through /ap/signin for 4s, then comes back)
 // Vendor Central dashboard at /custom-analytics/dashboard/<id> (same data path,
 // fields, header text and Export button as the real one, checked 2026-11-22).
@@ -21,6 +22,12 @@
 //      (YYYY-MM-DD, default 2026-11-19), MOCK_VC_NO_EXPORT=1, MOCK_VC_DROP_COL=RAW_RATING
 import http from 'node:http';
 import fs from 'node:fs';
+
+// MOCK_FOREIGN_FLAKY_SEC=N / MOCK_VC_FLAKY_SEC=N: a false alarm. The site shows
+// the sign-in page for the first N seconds after the mock starts, then is
+// signed in again (like 25 Nov 2026 on a shaky connection).
+const started = Date.now();
+const flaky = (name) => Number(process.env[name]) > 0 && Date.now() - started < Number(process.env[name]) * 1000;
 
 const port = Number(process.argv[2] || 8899);
 const TOTAL = Number(process.env.MOCK_TOTAL || 130);
@@ -206,7 +213,7 @@ http.createServer((req, res) => {
   if (url.pathname === '/sheets-count') return send(200, 'application/json', JSON.stringify({ rows: sheet.size }));
 
   if (url.pathname.startsWith('/custom-analytics/dashboard/')) {
-    if (process.env.MOCK_VC_LOGGED_OUT === '1') {
+    if (process.env.MOCK_VC_LOGGED_OUT === '1' || flaky('MOCK_VC_FLAKY_SEC')) {
       // Like Amazon: a visible sign-in form, plus a hidden fake password field.
       return send(200, 'text/html', '<form><input id="ap_email" type="email"><input type="password" style="display:none"></form>');
     }
@@ -225,7 +232,7 @@ http.createServer((req, res) => {
   }
 
   if (process.env.MOCK_LOGGED_OUT === '1') return send(200, 'text/html', '<input id="ap_email" type="email">');
-  if (process.env.MOCK_FOREIGN_LOGGED_OUT === '1' && (req.headers.host || '').startsWith('127.0.0.1')) {
+  if ((process.env.MOCK_FOREIGN_LOGGED_OUT === '1' || flaky('MOCK_FOREIGN_FLAKY_SEC')) && (req.headers.host || '').startsWith('127.0.0.1')) {
     return send(200, 'text/html', '<input id="ap_email" type="email">');
   }
 

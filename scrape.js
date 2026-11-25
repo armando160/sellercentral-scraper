@@ -16,14 +16,14 @@
 // Exit codes: 0 ok, 2 sign-in needed, 1 error (in at least one view).
 import fs from 'node:fs';
 import path from 'node:path';
-import { openBrowser, isSignedOut, onReviewsData, findNext, clickNext, politeDelay, sleep } from './lib/browser.js';
+import { openBrowser, isSignedOut, confirmSignedOut, onReviewsData, findNext, clickNext, politeDelay, sleep } from './lib/browser.js';
 import { selectView, checkView, SwitchError } from './lib/switcher.js';
 import { rowsFromResponse } from './lib/bcr.js';
 import { openDb, upsertReview, saveRaw, startRun, finishRun, saveViewRun, markMissing } from './lib/db.js';
 import { uploadToSheets } from './lib/sheets.js';
 import { notify, healthcheck } from './lib/notify.js';
 import { esc, htmlTable, H, P } from './lib/emailhtml.js';
-import { loadViews, pickViews, waitingViews, viewKey, viewName, reviewLink, siteName } from './lib/views.js';
+import { loadViews, pickViews, waitingViews, viewKey, viewName, reviewLink, siteName, siteUrl } from './lib/views.js';
 import { config } from './lib/config.js';
 import { takeLock } from './lib/lock.js';
 import { statusRows, STATUS_HEAD } from './lib/status.js';
@@ -47,7 +47,7 @@ if (!release) { log('Another browser job is still running after 45 minutes. Stop
 
 const db = openDb();
 const runId = startRun(db);
-const { context, page } = await openBrowser();
+let { context, page } = await openBrowser();
 
 // The view being read right now. Data the page loads is only kept while a
 // view is set, and only after the top bar was checked (until then it waits).
@@ -75,11 +75,14 @@ function take(text, url) {
   log(`  ${viewName(view)} page ${json.pageId + 1}: ${json.reviews?.length ?? 0} reviews, ${fresh} new`);
 }
 
-onReviewsData(page, async (url, text) => {
-  if (!cur) return;
-  if (!cur.checked) { cur.queue.push([text, url]); return; }
-  take(text, url);
-});
+function listen() {
+  onReviewsData(page, async (url, text) => {
+    if (!cur) return;
+    if (!cur.checked) { cur.queue.push([text, url]); return; }
+    take(text, url);
+  });
+}
+listen();
 
 async function waitForPage(target, timeoutMs = 30000) {
   const start = Date.now();
@@ -133,11 +136,10 @@ async function pullView(view, res) {
 const results = [];
 const signedOutSites = new Set(); // Seller Central sites that are signed out
 
-for (const [i, view] of views.entries()) {
+async function runView(view, i) {
   const res = { view, status: 'ok', pages: 0, seen: 0, new_reviews: 0, low_star_new: 0,
     amazon_total: null, note: null, newLowStar: [], stars: [0, 0, 0, 0, 0, 0], asins: new Map() };
-  results.push(res);
-  if (signedOutSites.has(view.site)) { res.status = 'not_run'; res.note = `not run: ${siteName(data, view.site)} signed out`; continue; }
+  if (signedOutSites.has(view.site)) { res.status = 'not_run'; res.note = `not run: ${siteName(data, view.site)} signed out`; return res; }
   if (i > 0) { await politeDelay(); await politeDelay(); } // a short break between views
   log(`${viewName(view)} (${view.store} / ${view.marketplace})`);
   const readStartedAt = new Date().toISOString();
@@ -154,9 +156,38 @@ for (const [i, view] of views.entries()) {
     console.error(`  ${viewName(view)}: ${msg}`);
   }
   cur = null;
-  saveViewRun(db, runId, viewKey(view), res);
   log(`  ${viewName(view)}: ${res.status}, ${res.pages} pages, ${res.new_reviews} new, Amazon shows ${res.amazon_total ?? '?'}`);
+  return res;
 }
+
+for (const [i, view] of views.entries()) results.push(await runView(view, i));
+
+// Second opinion before telling anyone a site is signed out. On 25 Nov 2026
+// the pulls said UK/Turkey/US were signed out on a shaky connection, and a
+// fresh Chrome one minute later was signed in everywhere (see confirmSignedOut).
+// Signed in after all = pull those views again. Can't tell = "failed", not
+// "signed out" (the morning check retries failed pulls).
+if (signedOutSites.size) {
+  await context.close().catch(() => {});
+  const verdicts = new Map();
+  for (const site of signedOutSites) {
+    const verdict = await confirmSignedOut({ url: siteUrl(data, site), profileDir: config.profileDir, tag: site });
+    log(`Second check of ${siteName(data, site)}: ${{ signed_out: 'really signed out', signed_in: 'signed in after all', unknown: "can't tell (internet?)" }[verdict]}.`);
+    verdicts.set(site, verdict);
+  }
+  ({ context, page } = await openBrowser());
+  listen();
+  for (const [site, verdict] of verdicts) {
+    if (verdict === 'signed_out') continue;
+    signedOutSites.delete(site);
+    for (const [i, res] of results.entries()) {
+      if (res.view.site !== site || !['login_needed', 'not_run'].includes(res.status)) continue;
+      if (verdict === 'signed_in') results[i] = await runView(res.view, 1);
+      else { res.status = 'error'; res.note = `Amazon showed a sign-in page, but the second check could not confirm it (internet?): ${res.note}`; }
+    }
+  }
+}
+for (const res of results) saveViewRun(db, runId, viewKey(res.view), res);
 
 // Leave the browser on the home view, so your own Seller Central tabs are back to normal.
 let homeNote = null;

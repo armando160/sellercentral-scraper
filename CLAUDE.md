@@ -127,7 +127,8 @@ Tests use `SECRETS_FROM_ENV=1` with `SECRET_<NAME>` env vars instead.
   The mock has the same top-bar selector (cookie `sel`); UK / Saudi Arabia /
   Turkey clicked on localhost go to 127.0.0.1 (another host, `other_site`).
   127.0.0.1 plays the foreign site: set `SITE_URL_UK/SA/TR=http://127.0.0.1:8899/brand-customer-reviews/?includeDone=true&pageSize=50`.
-  `MOCK_FOREIGN_LOGGED_OUT=1` signs out only 127.0.0.1. Use
+  `MOCK_FOREIGN_LOGGED_OUT=1` signs out only 127.0.0.1. `MOCK_FOREIGN_FLAKY_SEC=N` / `MOCK_VC_FLAKY_SEC=N`
+  show the sign-in page only for the first N seconds (a false alarm; try 50). Use
   `VIEWS_FILE=test/views.test.json` and `--day=monday|tuesday` or `--view=`.
 - `raw_responses` keeps every API response untouched: after changing
   `lib/bcr.js`, `npm run reparse` rebuilds rows without hitting Amazon.
@@ -162,6 +163,13 @@ Tests use `SECRETS_FROM_ENV=1` with `SECRET_<NAME>` env vars instead.
 - Own Chrome profile `.browser-profile-vc/`. `signin.js` = the Desktop "Amazon Sign In"
   file: checks both sites headless, opens Chrome only for the signed-out one,
   polls until signed in (never touches the form), reruns a pull that failed today.
+- **Never email "signed out" on one look.** Before any signed-out alert, `scrape.js` and
+  `vc-pull.js` close their Chrome and call `confirmSignedOut` (`lib/browser.js`): wait 30 s,
+  check the internet (Apple/Google, never Amazon), open a fresh Chrome on the page. Signed in
+  after all = pull again right away; can't tell = "failed" (no alert, the morning check
+  retries). `isSignedOut` throws "No internet" instead of saying signed out when offline.
+  Why: 25 Nov 2026 the pulls said UK/Turkey/US signed out on a shaky connection, and a
+  fresh Chrome one minute later was signed in everywhere.
 - Emails explain themselves (WHAT HAPPENED / WHY IT MATTERS / WHAT TO DO / IF YOU DO
   NOTHING / ABOUT THIS EMAIL). Success is silent.
 - Mock: `test/mock-site.js` serves `/custom-analytics/dashboard/<id>`; env
