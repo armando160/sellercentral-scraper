@@ -9,6 +9,7 @@
 #
 #   ./install-schedule.sh            install / update
 #   ./install-schedule.sh remove     uninstall
+#   ./install-schedule.sh shortcut   only (re)make the "Amazon Sign In" file on the Desktop
 #
 # The Mac must also WAKE itself every morning. That needs your admin password,
 # so this script prints the command for you to run.
@@ -21,7 +22,35 @@ PULL="com.reviews-scraper.pull"
 REMIND="com.reviews-scraper.remind"
 VC="com.reviews-scraper.vc"
 CHECK="com.reviews-scraper.check"
+# Which node the jobs use. Homebrew: /opt/homebrew/bin/node (stays valid after upgrades).
+# fnm (no-admin install): "command -v node" is a temporary folder that disappears, and then
+# every job fails silently, so use the real file under ~/.local/share/fnm instead.
+command -v node >/dev/null || { echo "node not found. Install Node 22.13 or newer first."; exit 1; }
 NODE="$(command -v node)"
+[[ "$NODE" == *fnm_multishells* ]] && NODE="$(node -p 'process.execPath')"
+NODE_OK="$("$NODE" -p 'const [a,b]=process.versions.node.split(".").map(Number); a>22||(a===22&&b>=13)')"
+[[ "$NODE_OK" == "true" ]] || { echo "node $("$NODE" --version) is too old. Need 22.13 or newer."; exit 1; }
+[ -d "/Applications/Google Chrome.app" ] || echo "WARNING: Google Chrome is not in /Applications. The pulls need it."
+
+# The "Amazon Sign In" file on the Desktop: double-click to sign in to every Amazon site
+# that is signed out (signin.js). Made here so it always points at THIS folder and node.
+write_shortcut() {
+  local f="$HOME/Desktop/Amazon Sign In.command"
+  {
+    echo '#!/bin/zsh'
+    echo '# Double-click to sign in to Seller Central and Vendor Central.'
+    echo '# Chrome opens only for what is signed out; you type the password and code.'
+    echo '# Made by install-schedule.sh. To remake it: ./install-schedule.sh shortcut'
+    echo "cd \"$DIR\" || exit 1"
+    echo "\"$NODE\" signin.js"
+    echo 'echo'
+    echo 'echo "You can close this window."'
+  } > "$f"
+  chmod +x "$f"
+  echo "Desktop shortcut: $f"
+}
+
+if [[ "$1" == "shortcut" ]]; then write_shortcut; exit 0; fi
 
 unload() { launchctl bootout "gui/$(id -u)/$1" 2>/dev/null || true; rm -f "$AGENTS/$1.plist"; }
 
@@ -61,6 +90,8 @@ write_agent $PULL "1 2 3" 6 "<string>$NODE</string><string>$DIR/run-job.js</stri
 write_agent $VC "0 1 2 3 4 5 6" 6 "<string>$NODE</string><string>$DIR/run-job.js</string><string>vc</string>"
 write_agent $CHECK "0 1 2 3 4 5 6" "9 13" "<string>$NODE</string><string>$DIR/run-job.js</string><string>check</string>"
 write_agent $REMIND "0 1 2 3 4 5 6" 18 "<string>$NODE</string><string>$DIR/remind.js</string>"
+
+write_shortcut
 
 echo "Installed: daily 6:00am Vendor Central pull, Monday + Tuesday + Wednesday 6:00am review pulls, daily 9:00am + 1:00pm morning check, daily 6:00pm evening check."
 echo ""

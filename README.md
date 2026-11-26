@@ -245,6 +245,19 @@ and reruns a pull that failed today. (Terminal: `npm run signin`.)
 | `npm run monthly` | CSV of reviews per month per parent ASIN |
 | `npm run export` | CSV of every review |
 | `./install-schedule.sh remove` | Turn off the schedule (`sudo pmset repeat cancel` for the wake) |
+| `./install-schedule.sh shortcut` | Make the "Amazon Sign In" file on the Desktop again (`install-schedule.sh` also makes it) |
+| `./setup-sheets.sh keepa` | Save the Keepa sheet ID in the Keychain |
+| `./setup-sheets.sh copy` | Moving Macs: writes `local/move-secrets.sh` with the same Keychain secrets for the new Mac |
+
+## Moving to another Mac
+
+Only ONE Mac may run this. On the new Mac: clone, `npm install`, then:
+
+1. On the OLD Mac: `./install-schedule.sh remove`, wait for any running job, then copy `data/` and `local/` to the new Mac and run `./setup-sheets.sh copy` (AirDrop `local/move-secrets.sh`, run it on the new Mac, delete it on both).
+2. Never run `./setup-sheets.sh token` on the new Mac: a new token no longer matches the sheet's Code.gs.
+3. Sign in to every site: double-click "Amazon Sign In" on the Desktop (made by step 4), or `npm run signin`.
+4. `./install-schedule.sh`, then `sudo pmset repeat wakeorpoweron MTWRFSU 05:55:00`.
+5. Keep the new Mac plugged in, lid open. If Documents syncs to iCloud or OneDrive, keep this folder out of it.
 
 ## If something goes wrong
 
