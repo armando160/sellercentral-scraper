@@ -4,6 +4,7 @@
 #   Monday 6:00am     Seller Central: pull Lifepro (views.json, day "monday"), then one email
 #   Tuesday 6:00am    Seller Central: pull Joyberri + Sunello (day "tuesday"), then one email
 #   Wednesday 6:00am  Seller Central: pull Lifepro UK, Saudi Arabia, Turkey (day "wednesday"), then one email
+#   Thursday 6:00am   Seller Central: pull Lifepro US again (day "thursday"), so new reviews show up mid-week
 #   Every day 9:00am + 1:00pm  daily check: did today's pulls work? retries failed ones, rebuilds KPIs. 9am always emails (subject starts OK or PROBLEM), 1pm only on problems
 #   Every day 6:00pm  evening check (plugged in? signed in?). Emails before pull days, or if something is wrong
 #
@@ -62,7 +63,7 @@ fi
 
 mkdir -p "$AGENTS" "$DIR/logs"
 
-# $1 label, $2 weekdays (e.g. "1 2"; 0=Sun,1=Mon,2=Tue), $3 hour(s) (e.g. "9 13"), $4 program args (xml)
+# $1 label, $2 weekdays (e.g. "1 2"; 0=Sun,1=Mon,2=Tue,4=Thu), $3 hour(s) (e.g. "9 13"), $4 program args (xml)
 write_agent() {
 local times=""
 for d in ${=2}; do
@@ -86,14 +87,14 @@ EOF
   launchctl bootstrap "gui/$(id -u)" "$AGENTS/$1.plist"
 }
 
-write_agent $PULL "1 2 3" 6 "<string>$NODE</string><string>$DIR/run-job.js</string><string>pull</string>"
+write_agent $PULL "1 2 3 4" 6 "<string>$NODE</string><string>$DIR/run-job.js</string><string>pull</string>"
 write_agent $VC "0 1 2 3 4 5 6" 6 "<string>$NODE</string><string>$DIR/run-job.js</string><string>vc</string>"
 write_agent $CHECK "0 1 2 3 4 5 6" "9 13" "<string>$NODE</string><string>$DIR/run-job.js</string><string>check</string>"
 write_agent $REMIND "0 1 2 3 4 5 6" 18 "<string>$NODE</string><string>$DIR/remind.js</string>"
 
 write_shortcut
 
-echo "Installed: daily 6:00am Vendor Central pull, Monday + Tuesday + Wednesday 6:00am review pulls, daily 9:00am + 1:00pm morning check, daily 6:00pm evening check."
+echo "Installed: daily 6:00am Vendor Central pull, Monday to Thursday 6:00am review pulls, daily 9:00am + 1:00pm morning check, daily 6:00pm evening check."
 echo ""
 echo "Now make the Mac wake itself every morning (asks for your Mac password):"
 echo ""

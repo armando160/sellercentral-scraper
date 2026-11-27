@@ -2,7 +2,7 @@
 // tonight instead of being found in the morning:
 //   1. Is the Mac plugged in?
 //   2. Is Vendor Central still signed in? (daily pull at 6:00am)
-//   3. Before a Seller Central pull day (Monday, Tuesday): is every Seller Central
+//   3. Before a Seller Central pull day (Monday to Thursday): is every Seller Central
 //      site tomorrow's views use (US, UK, Saudi Arabia, Turkey) signed in?
 // The pages are opened out of sight.
 //

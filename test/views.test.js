@@ -12,6 +12,7 @@ test('Monday is Lifepro North America, Tuesday is Joyberri and Sunello', () => {
   assert.deepEqual(wed.map((v) => `${v.brand} ${v.code}`), ['Lifepro UK', 'Lifepro SA', 'Lifepro TR']);
   const tue = pickViews(data, ['--day=tuesday']);
   assert.ok(tue.every((v) => v.brand === 'Joyberri' || v.brand === 'Sunello'));
+  assert.deepEqual(pickViews(data, ['--day=thursday']).map((v) => `${v.brand} ${v.code}`), ['Lifepro US']);
   assert.equal(pickViews(data, ['--day=friday']).length, 0);
 });
 

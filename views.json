@@ -3,7 +3,7 @@
     "One line per view (store + marketplace) to pull.",
     "store and marketplace must match the Seller Central top-bar selector exactly.",
     "brand is what the Google Sheet shows. code is the short marketplace name in the sheet.",
-    "day: which day's run pulls it (monday, tuesday or wednesday). enabled: false = skipped for now.",
+    "day: which day's run pulls it (monday, tuesday, wednesday or thursday), or a list like [\"monday\", \"thursday\"] for twice a week. enabled: false = skipped for now.",
     "home is where the browser is left at the end of every run.",
     "site: which Seller Central site the view lives on (default NA). Each site in 'sites' needs its own sign-in.",
     "Site addresses marked 'guess' are confirmed the first time you sign in there."
@@ -16,7 +16,7 @@
   },
   "home": { "store": "LIFEPRO OUTLET", "marketplace": "United States" },
   "views": [
-    { "store": "LIFEPRO OUTLET", "marketplace": "United States", "code": "US", "brand": "Lifepro", "day": "monday" },
+    { "store": "LIFEPRO OUTLET", "marketplace": "United States", "code": "US", "brand": "Lifepro", "day": ["monday", "thursday"] },
     { "store": "LIFEPRO OUTLET", "marketplace": "Canada", "code": "CA", "brand": "Lifepro", "day": "monday" },
     { "store": "LIFEPRO OUTLET", "marketplace": "Mexico", "code": "MX", "brand": "Lifepro", "day": "monday" },
 

@@ -4,7 +4,7 @@
 // reviews the page loads. At the end it switches back to the home view
 // (LIFEPRO OUTLET / United States), uploads to Google Sheets and sends ONE email.
 //
-//   npm run pull                          today's views (Monday: Lifepro, Tuesday: Joyberri + Sunello)
+//   npm run pull                          today's views (Mon: Lifepro NA, Tue: Joyberri + Sunello, Wed: Lifepro UK/SA/TR, Thu: Lifepro US)
 //   npm run pull -- --day=tuesday         another day's views
 //   npm run pull -- --view="Joyberri LLC/CA"   one view (can repeat)
 //   npm run pull -- --all                 every enabled view

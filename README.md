@@ -4,7 +4,7 @@ Two pulls run on this Mac, in real Chrome, clicking like a person:
 
 | Pull | When | What it saves |
 |---|---|---|
-| **Seller Central** written reviews | Monday, Tuesday and Wednesday 6:00am | Every written review (text, stars, ASINs) per store and marketplace. Uploads to a Google Sheet, then one email |
+| **Seller Central** written reviews | Monday to Thursday 6:00am | Every written review (text, stars, ASINs) per store and marketplace. Uploads to a Google Sheet, then one email |
 | **Vendor Central** dashboard | Every day 6:00am | Review count (written + star-only), star rating and units (ordered, and shipped where shown) per ASIN, with Amazon's refresh dates. Quiet unless there's a problem |
 
 Everything goes into one database on this Mac, `data/reviews.db`. That's the
@@ -25,6 +25,7 @@ Central top bar.
 | Tuesday | Joyberri LLC | Joyberri | US, CA, MX |
 | Tuesday | Sunello | Sunello | US, CA, MX |
 | Wednesday | LIFEPRO OUTLET | Lifepro | UK, Saudi Arabia (SA), Turkey (TR). Each is its own Seller Central site with its own sign-in |
+| Thursday | LIFEPRO OUTLET | Lifepro | US only (second pull of the week, so new reviews show up mid-week) |
 
 Europe, UAE and Saudi Arabia for Lifepro are in `views.json` but turned off
 (`"enabled": false`): they live on other Seller Central sites
@@ -45,7 +46,7 @@ says so.
 | What does it save? | Review ID, date, brand, marketplace, stars, title, text, parent ASIN, child ASIN, product name, verified, Vine, images, video, replied, done. **Not** the reviewer's name |
 | Where? | `data/reviews.db` on this Mac, and the Google Sheet |
 | Duplicates? | Never. Each review is saved once by its Amazon review ID. If a review changes (for example it gets marked replied), the row is updated |
-| How often? | Weekly. Lifepro North America Monday 6:00am, Joyberri and Sunello Tuesday 6:00am, Lifepro UK, SA and TR Wednesday 6:00am |
+| How often? | Weekly. Lifepro North America Monday 6:00am, Joyberri and Sunello Tuesday 6:00am, Lifepro UK, SA and TR Wednesday 6:00am, Lifepro US again Thursday 6:00am |
 
 ### What the reviews page allows (checked 18 Nov 2026)
 
@@ -215,9 +216,10 @@ Mac notifications only help if you're at the Mac.
 | When | What |
 |---|---|
 | Every day 6:00am | Vendor Central pull. **No email when it works.** An email only if it needs you (signed out, page changed, time period changed) |
-| Every day 6:00pm | Evening check. Emails the evening before a review pull (Sunday, Monday), or any evening Vendor Central is signed out |
+| Every day 6:00pm | Evening check. Emails the evening before a review pull (Sunday to Wednesday), or any evening Vendor Central is signed out |
 | Monday ~6:10am | Lifepro US, CA, MX: new reviews per star and per view, plus the "Latest data available" table |
 | Tuesday ~6:05am | Joyberri and Sunello: same email |
+| Wednesday, Thursday ~6:05am | Lifepro UK, SA, TR (Wednesday) and Lifepro US (Thursday): same email |
 | Monday / Tuesday ~9:00am | "DID NOT RUN", **only** if the Mac never reported in |
 
 ## When Amazon signs you out
